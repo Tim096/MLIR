@@ -399,17 +399,33 @@ git clang-format HEAD~1
 
 > **這一節是活的看板。每次有進展就改這裡。**
 
-### 現在的狀態
+### 現在的狀態（2026-08-06）
 - [x] 建立本 repo 與 Goal.md
-- [ ] `apt install` 建置依賴（需要 sudo 密碼，由使用者手動執行）
-- [ ] LLVM clone 完成
-- [ ] 首次建置成功、`ninja check-mlir` 全綠 → **M-1 達成**
-- [ ] 產出 `arith` 候選 patch 清單 → 挑一個最小的當 M0
+- [x] 安裝建置依賴（clang 14 / lld 14 / ninja 1.10 / ccache 4.5 / z3 4.8.12）
+- [x] LLVM clone 完成 — HEAD `27f1aa4c9a42`（2026-08-06）
+- [x] cmake 配置成功
+- [ ] `ninja check-mlir` 全綠 → **M-1 達成**（建置進行中）
+- [x] 產出 `arith` 候選 patch 清單 → [`notes/arith-patch-candidates.md`](notes/arith-patch-candidates.md)
+
+機器規格：16 核 / 31GB RAM / 928GB 可用。
+
+### 掃描結果的重要修正
+
+原本 §8.4 假設「找缺的 canonicalization」是主要題目來源，**這個假設在 `arith` 裡不成立**：
+54 個 op 幾乎全都有 folder，這條路大部分已被做掉。
+
+真正的縫隙是**既有 folder 裡被明確標註放棄的 case**——尤其是
+`ArithCanonicalization.td` 裡三個「不確定在 custom rounding mode 下是否安全」的 TODO。
+那是 upstream 親口承認的未解問題，而且正好是 SMT 可判定的命題，
+與本專案 §2.1 的閉環完美對上。
 
 ### 接下來要做的事（依序）
-1. 完成環境建置（M-1）
-2. 從候選清單挑**最小**的題目做 M0——目標是打通流程，不是做大事
-3. M0 merged 之後，再挑 3~5 個實質題目做 M1
+1. 等 `ninja check-mlir` 跑完 → M-1
+2. **候選 1**（收掉過期 TODO、讓 switch 變 exhaustive，NFC）當 M0 —— 目標是打通流程，不是做大事
+3. **候選 4**（`ceildivsi` 的 MININT folding gap）當 M1 第一發 —— 有實際行為改變、好寫 test
+4. **候選 3**（rounding mode 安全性）當 M1 主菜 —— 同時是 M4 工具的第一個驗證目標
+
+動手前先做 `notes/arith-patch-candidates.md` 的「待辦」第一項：**確認沒有人已經在做**。
 
 ### 給未來的自己的提醒
 - 覺得某個 ML 編譯 / 硬體後端的題目很有趣時 → 回去看 §1.3，我們不走那條路
