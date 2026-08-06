@@ -53,10 +53,16 @@ PR 流程前置（fork / gh / clang-format 22.1.0 / push 權限）全部就緒�
         `warning: enumeration value 'xori' not handled in switch [-Wswitch]`
         （CI 的 `-Werror` 組態下會是編譯錯誤）
 
+      - ✅ **`check-mlir` 全綠：3838 passed / 0 failed**，與基準線逐項一致（NFC 成立）
+
       待辦：
-      - [ ] `check-mlir` 全綠（跑第二次；第一次被下面「坑 2」污染而作廢）
       - [ ] rebase 到最新上游 main
       - [ ] push 到 fork 並開 PR
+
+- [ ] **決定 ArithToSMT 要怎麼走** — 見 `notes/arith-to-smt-exploration.md` §5。
+      建議：先在 PR #131484 留一則有憑有據的意見（具體反例＋上游既有正解位置＋
+      指出零測試），看作者反應再決定要不要徵求接手。
+      ⚠️ 對外公開動作，送出前要本人確認。
 
 ## VS Code 開發環境（2026-08-07 建好）
 
@@ -341,11 +347,19 @@ Matthias Springer (5)、**Andrzej Warzyński (5) ← 這題直接找他**
   and or xor not neg cmp concat extract repeat bv2int int2bv`
   → **`arith` 的整數 op 幾乎可以一對一對應**
 
-⚠️ **限制一：沒有 `ArithToSMT` conversion。** `mlir/lib/Conversion/` 底下完全沒有 SMT
-相關的東西。從 `arith` 到 `smt` 的橋要自己寫。
-（CIRCT 有 `HWToSMT` / `CombToSMT` 可以參考寫法，但 `arith` 這條上游沒有。）
-**這件事本身就是一個夠份量的 upstream 貢獻題目**，而且跟 M4 完全同向——先寫這座橋，
-M4 的驗證器就直接站在上面。值得認真考慮當 M1 之後的主菜。
+⚠️ **限制一：merge 進 main 的沒有 `ArithToSMT` conversion**——但**有一個停擺的 draft PR**。
+
+> 📄 **完整探查見 [`notes/arith-to-smt-exploration.md`](notes/arith-to-smt-exploration.md)。**
+>
+> PR **#131484**（`makslevental`，就是上游化 SMT dialect 的同一人）：
+> draft、2025-03-16 開的、**17 個月零留言零 review**、+498 行。
+> 骨架合理，但 **`ceildivsi` 的轉換數學上是錯的**（用 `(a+b-1)/b`，
+> 而 `arith.divsi` 往零截斷，只在 `a>0 且 b>0` 可靠；10 取樣錯 6），
+> **而且該 pattern 零測試覆蓋**。上游 `ExpandOps.cpp:91` 早就有正確版本。
+>
+> ⚠️ **教訓**：第一次掃只用 `ls mlir/lib/Conversion/ | grep -i smt` 看本地 source tree，
+> 結論「上游完全沒有」是錯的——**看不到未 merge 的 PR**。
+> 判斷有沒有人做過，一定要同時搜 open PR。
 
 ⚠️ **限制二：`smt` dialect 沒有浮點理論。** types 裡沒有 FloatingPoint，
 全樹 grep 不到 `fp.` / `RoundingMode` 之類字樣。
