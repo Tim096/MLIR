@@ -41,7 +41,47 @@ PR 流程前置（fork / gh / clang-format 22.1.0 / push 權限）全部就緒�
 
 ## 進行中
 
-環境已全部就緒（見下）。**下一步是動手寫 M0 的 patch。**
+- [ ] **M0 patch 已寫好並 commit，等最終驗證** — branch
+      `arith-exhaustive-atomicrmwkind-switch`，commit `94c040ab2631`
+
+      已完成：
+      - 兩處 switch 改成窮盡，診斷移到 switch 之後（行為逐字不變）
+      - `ninja mlir-opt` 建置成功、零警告
+      - Arith + Transforms 測試 **121/121 passed**
+      - `git clang-format HEAD~1` 乾淨
+      - **實驗證明保護有效**：故意拿掉 `case xori` 後編譯器確實報
+        `warning: enumeration value 'xori' not handled in switch [-Wswitch]`
+        （CI 的 `-Werror` 組態下會是編譯錯誤）
+
+      待辦：
+      - [ ] `check-mlir` 全綠（跑第二次；第一次被下面「坑 2」污染而作廢）
+      - [ ] rebase 到最新上游 main
+      - [ ] push 到 fork 並開 PR
+
+## VS Code 開發環境（2026-08-07 建好）
+
+用 **`~/Side_Project/MLIR/mlir-dev.code-workspace`** 開，會同時掛上本 repo 與
+`llvm-project` 兩個資料夾。
+
+**一鍵執行**：開著任一 `.mlir` 檔按 **`Ctrl+Shift+B`**
+→ 先 `ninja mlir-opt`（沒改東西約 1 秒）再跑 `--canonicalize`。
+「先建置再執行」是刻意的：拿舊執行檔測新程式碼會得到看起來很像真的錯誤結論。
+裝了 Code Runner 後右上角 ▷ 也可以直接跑（只跑不建置，改過 C++ 時別用這個）。
+
+其他任務在 Terminal → Run Task，清單見 `playground/README.md`。
+
+設定檔位置（**都被上游 `.gitignore` 蓋掉，不會誤入 PR，已確認**）：
+`~/llvm-project/.vscode/{settings,tasks,launch,extensions}.json` 與 `~/llvm-project/.clangd`
+
+已裝擴充：`vscode-mlir`、`vscode-clangd`、`code-runner`。
+⚠️ `settings.json` 已把 **cpptools 的 IntelliSense 關掉**（`C_Cpp.intelliSenseEngine: disabled`），
+因為兩個引擎同時開會打架；但 cpptools 擴充本身要留著，`launch.json` 的偵錯靠它。
+
+⚠️ `cmake.configureOnOpen` 等三項已關閉——不然 cmake-tools 可能自動 reconfigure，
+把 `Goal.md` §7.3 那組精選 flag 沖掉。
+
+⚠️ **刻意不開 `formatOnSave`**：整檔格式化會動到你沒碰的區域，diff 立刻多出幾百行雜訊。
+LLVM 的正確做法是只格式化改動的行 = `git clang-format`，已做成任務。
 
 ---
 
@@ -93,8 +133,28 @@ tail -20 ~/llvm-project/build/build.log
 cd ~/llvm-project/build && setsid nohup ninja check-mlir > build.log 2>&1 < /dev/null &
 ```
 
-⚠️ **一定要用 `setsid` 讓它脫離 session** —— 第一次跑沒加，Claude Code session
-結束時整個 build 被帶走。
+### ⚠️ 兩個已經實際踩過的坑
+
+**1. 一定要用 `setsid` 讓它脫離 session。**
+第一次跑沒加，Claude Code session 結束時整個 build 被帶走。
+（副作用：`setsid` 脫離後 `pkill -f "ninja check-mlir"` 不一定殺得掉，
+要用 `pgrep -a ninja` 拿 PID 再 `kill`。）
+
+**2. 🔥 絕對不要同時跑兩個 ninja 在同一個 build 目錄。**
+2026-08-07 實際踩到：背景 `check-mlir` 跑到一半，另開一個 `ninja mlir-opt`，
+結果測試大量 FAIL，訊息是
+
+```
+mlir-opt: error while loading shared libraries: libLLVMX86Desc.so.24.0git:
+cannot open shared object file
+```
+
+因為我們用 `BUILD_SHARED_LIBS=ON`，第二個 ninja 重新連結 `.so` 的**瞬間**，
+正在執行的測試就找不到函式庫。**這種失敗跟程式碼完全無關，但看起來很像真的迴歸**——
+會浪費大把時間去 debug 一個不存在的 bug。
+
+**判斷方法**：看到 `error while loading shared libraries` 就知道是這個原因，
+不是你的 patch 壞掉。做法是等前一個跑完，或先 `kill` 掉再重跑。
 
 ---
 

@@ -1,7 +1,3 @@
-.claude/settings.local.json
-build/
-*.o
-*.ll
-*.bc
-__pycache__/
-.venv/
+# playground 的隨手檔不進版控，templates/ 要進
+playground/scratch*.mlir
+playground/*.tmp.mlir

@@ -1,0 +1,36 @@
+{
+  // 用 VS Code 開這個檔（File → Open Workspace from File），
+  // 就會同時掛上「本專案 repo」與「LLVM 上游」兩個資料夾。
+  //
+  // 這樣做的理由：筆記與 playground 在本 repo，實際改的 code 在 llvm-project。
+  // 分開兩個視窗切換很煩，多根工作區可以一起看。
+  // llvm-project/.vscode/tasks.json 裡的任務在這個工作區裡照樣叫得出來。
+  "folders": [
+    {
+      "name": "📓 MLIR 專案（筆記／playground）",
+      "path": "."
+    },
+    {
+      "name": "🔧 llvm-project（上游原始碼）",
+      "path": "../../llvm-project"
+    }
+  ],
+  "settings": {
+    // 再保險一次：多根工作區的設定會蓋過單一資料夾的，
+    // 所以 cmake-tools 的自動 reconfigure 要在這裡也關掉。
+    "cmake.configureOnOpen": false,
+    "cmake.automaticReconfigure": false,
+
+    "files.associations": {
+      "*.mlir": "mlir",
+      "*.td": "tablegen"
+    },
+    "files.watcherExclude": {
+      "**/llvm-project/build/**": true,
+      "**/.git/objects/**": true
+    },
+    "search.exclude": {
+      "**/llvm-project/build": true
+    }
+  }
+}
