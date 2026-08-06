@@ -9,14 +9,17 @@
 >
 > 新 session 開場建議直接說：「讀 Goal.md 和 TODO.md，然後接續」。
 
-最後更新：2026-08-06 23:5x
+最後更新：2026-08-07
 
 ---
 
 ## 一句話現況
 
-`ninja check-mlir` 跑到 ~670/2269。**撞車查證已完成，兩個題目都確認安全**（見下）。
-還沒送出任何 patch。真正的卡點是 **GitHub 帳號 / fork / git identity 都還沒設定**。
+**M-1 達成**（`check-mlir` 3838 passed / 0 failed），環境逐項驗收通過，
+PR 流程前置（fork / gh / clang-format 22.1.0 / push 權限）全部就緒。
+撞車查證完成、兩個題目都安全，`ceildivsi` 的分析已用 `mlir-opt` 實證。
+
+**還沒送出任何 patch。下一步就是動手寫 M0。**
 
 ---
 
@@ -38,22 +41,60 @@
 
 ## 進行中
 
-- [ ] **`ninja check-mlir` 建置＋測試** — 這是 **M-1 的完成條件**，全綠即達成
+環境已全部就緒（見下）。**下一步是動手寫 M0 的 patch。**
 
-      ```bash
-      # 檢查是否還活著
-      pgrep -a ninja
-      # 看進度
-      tail -20 ~/llvm-project/build/build.log
-      # 中斷了就重跑（ninja 是增量的，加上 ccache，接續很快）
-      cd ~/llvm-project/build && setsid nohup ninja check-mlir > build.log 2>&1 < /dev/null &
-      ```
+---
 
-      - ⚠️ **一定要用 `setsid` 讓它脫離 session**。第一次跑的時候沒有，
-        結果 Claude Code session 結束時整個 build 被帶走，只建到 tblgen 那批就沒了
-      - 冷啟動估計 30~90 分鐘（16 核）
-      - ⚠️ host compiler 是 clang 14（Ubuntu 22.04 內建）。如果編譯失敗抱怨
-        C++ 標準或 host toolchain 版本太舊，改用 gcc-11 或裝新版 clang 再試
+## 環境驗收（2026-08-07 全數通過）
+
+**🎉 M-1 達成** — `ninja check-mlir`：**3838 passed / 0 failed**
+（611 unsupported 是需要 GPU/特定 target 的測試，正常；1 expectedly failed 也是預期內）。
+測試耗時 435s，全建置約 1.5 小時。
+
+| 檢查項 | 結果 |
+|---|---|
+| `mlir-opt` | ✅ LLVM 24.0.0git，**Optimized build with assertions**（符合 `Goal.md` §7.3） |
+| `mlir-translate` / `mlir-reduce` / `mlir-lsp-server` | ✅（`mlir-reduce` 是 M2 要用的） |
+| `llvm-lit` / `FileCheck` / `not` | ✅ |
+| 單檔 lit test | ✅ `canonicalize.mlir` + `constant-fold.mlir` 2/2 passed |
+| `mlir-opt` 實跑真實 IR | ✅ 見 `notes/ceildivsi-minint-analysis.md` §4 |
+| `clang-format` | ✅ **22.1.0**（見下方注意事項） |
+| `git clang-format` | ✅ 實測可跑 |
+| fork push 權限 | ✅ `git push --dry-run` 通過 |
+| z3 | ✅ 4.8.12 |
+| `gh` | ✅ 2.4.0（舊但堪用） |
+| 磁碟 | ✅ 921G 可用，build 目錄僅 1.7G |
+
+### ⚠️ clang-format 的坑（重裝環境時會再遇到）
+
+1. **版本必須對齊上游 CI。** 上游 `pr-code-format.yml` 用容器
+   `ghcr.io/llvm/ci-ubuntu-24.04-format`，其 Dockerfile 釘死
+   `LLVM_VERSION=22.1.0`。**apt 只有 14，差 8 個大版本，格出來會跟 CI 不一致**。
+   解法：`pip3 install clang-format==22.1.0`（不需要 sudo）。
+
+2. **PATH 設定有兩層陷阱。** pip 裝到 `~/.local/bin`：
+   - `~/.profile` 有加 `~/.local/bin`，但只在 **login shell** 生效，
+     且該目錄是裝完才建的，當下的 shell 抓不到
+   - `~/.bashrc` 對**非互動 shell 會提前 `return`**，加在檔尾永遠跑不到
+     → 要插在 early-return **之前**（已處理）
+
+3. **最可靠的是完全不依賴 PATH**，直接告訴 git 位置（已設定，重灌環境要重設）：
+
+   ```bash
+   git config --global alias.clang-format '!'"$HOME"'/.local/bin/git-clang-format'
+   git config --global clangformat.binary "$HOME/.local/bin/clang-format"
+   ```
+
+### 重跑 build 的指令
+
+```bash
+pgrep -a ninja                       # 還活著嗎
+tail -20 ~/llvm-project/build/build.log
+cd ~/llvm-project/build && setsid nohup ninja check-mlir > build.log 2>&1 < /dev/null &
+```
+
+⚠️ **一定要用 `setsid` 讓它脫離 session** —— 第一次跑沒加，Claude Code session
+結束時整個 build 被帶走。
 
 ---
 
@@ -61,31 +102,34 @@
 
 ### 0. 送 PR 的前置設定
 
-| 項目 | 現況 | 備註 |
-|---|---|---|
-| git identity | ✅ 已設 | `HungKuan` / `p76091014@gs.ncku.edu.tw`（全域） |
-| GitHub 帳號 | ✅ `hungkuan` | 2014 建立、0 個 public repo。**canonical login 是小寫** |
-| `fork` remote | ✅ 已加 | `https://github.com/hungkuan/llvm-project.git` |
-| **GitHub 上的 fork** | ❌ **還沒建** | 要在瀏覽器或 `gh` 上做，remote 目前指向不存在的 repo |
-| `gh` CLI | ❌ 未安裝 | 要 sudo，Claude 跑不了 |
+**✅ 全部就緒（2026-08-07）**
 
-**⚠️ email 會永久公開在 LLVM 的 commit 歷史裡。** 現在用的是學校信箱
-`p76091014@gs.ncku.edu.tw`——畢業後可能失效。要換的話**趁還沒送出第一個 PR 之前換掉**，
-送出去就改不掉了（`git config --global user.email <新的>`）。
+| 項目 | 現況 |
+|---|---|
+| GitHub 帳號 | **`Tim096`**（曾鈜寬 Tseng Hung Kuan） |
+| `gh` CLI | ✅ 已裝並 `gh auth login` 完成 |
+| fork | ✅ `Tim096/llvm-project` |
+| `fork` remote | ✅ `https://github.com/Tim096/llvm-project.git` |
+| git identity | ✅ `HungKuan` / `p76091014@gs.ncku.edu.tw`（全域） |
 
-剩下要人工跑的兩步：
+`origin` 維持指向 `llvm/llvm-project`（fetch 上游用），`fork` 才是 push 的地方。
+
+> ⚠️ **踩過的坑**：一開始只憑姓名去猜 GitHub 帳號，猜成 `hungkuan`——
+> 那是一個 2014 年建立、0 repo 的**別人的**帳號，remote 一度指錯。
+> 正確做法是直接讀 `gh auth status`，不要猜。
+
+### 兩個還沒定案的個資決定（送出第一個 PR 前要決定，之後改不掉）
+
+1. **email 會永久公開在 LLVM commit 歷史裡。** 現在是學校信箱
+   `p76091014@gs.ncku.edu.tw`，畢業後可能失效。
+2. **`user.name` 現在是 `HungKuan`。** LLVM 慣例是用完整真名
+   （GitHub 上登記的是「曾鈜寬 Tseng Hung Kuan」），例如 `Hung-Kuan Tseng`。
+   履歷要對得起來的話，這裡的名字最好跟 GitHub profile 一致。
 
 ```bash
-# 1. 裝 gh（Ubuntu 22.04 內建的是 2.4.0，有點舊但堪用；下面是官方新版）
-sudo apt install -y gh          # 簡單版
-gh auth login                   # 走瀏覽器 OAuth，不要用密碼
-
-# 2. 建 fork（gh 裝好後一行搞定；--remote-name 對上已經加好的 remote）
-cd ~/llvm-project && gh repo fork --remote=false
-# 或直接去 https://github.com/llvm/llvm-project 按 Fork
+git config --global user.email "<新的>"
+git config --global user.name  "<新的>"
 ```
-
-`origin` 維持指向 `llvm/llvm-project`（用來 fetch 上游），`fork` 才是我們 push 的地方。
 
 ### 1. ~~先確認沒撞車~~ ✅ 已完成（2026-08-06）
 
@@ -224,10 +268,33 @@ Matthias Springer (5)、**Andrzej Warzyński (5) ← 這題直接找他**
 `ArithOps.cpp:654` 的 `// TODO: Handle the overflow case.`。
 推測跟 `nsw` / `nuw` flag 有關，但**還沒查清楚**。要先搞懂再決定值不值得做。
 
-### Q3：MLIR 的 `smt` dialect 現在還在嗎？
+### ~~Q3：MLIR 的 `smt` dialect 現在還在嗎？~~ ✅ 已解（2026-08-07）
 
-聽說近年從 CIRCT 移入 upstream。若在，M4 的驗證器可以建在它之上，
-不必自己接 Z3 binding。**M4 開始前確認。**（z3 已經裝了，兩條路都走得通。）
+**在，而且比預期完整。** 但有兩個關鍵限制，直接影響 M4 怎麼設計。
+
+有的東西：
+- `mlir/{include,lib}/Dialect/SMT` — dialect 本體
+- `mlir/lib/Target/SMTLIB/ExportSMTLIB.cpp` — **能匯出成 SMT-LIB 文字**，
+  可以直接餵給已裝好的 z3，不必自己接 C++ binding
+- types：`Bool` / `Int` / `BitVector` / `Array` / `SMTFunc` / `Sort`
+- bitvector 理論 op 齊全：`add mul udiv sdiv urem srem smod shl lshr ashr
+  and or xor not neg cmp concat extract repeat bv2int int2bv`
+  → **`arith` 的整數 op 幾乎可以一對一對應**
+
+⚠️ **限制一：沒有 `ArithToSMT` conversion。** `mlir/lib/Conversion/` 底下完全沒有 SMT
+相關的東西。從 `arith` 到 `smt` 的橋要自己寫。
+（CIRCT 有 `HWToSMT` / `CombToSMT` 可以參考寫法，但 `arith` 這條上游沒有。）
+**這件事本身就是一個夠份量的 upstream 貢獻題目**，而且跟 M4 完全同向——先寫這座橋，
+M4 的驗證器就直接站在上面。值得認真考慮當 M1 之後的主菜。
+
+⚠️ **限制二：`smt` dialect 沒有浮點理論。** types 裡沒有 FloatingPoint，
+全樹 grep 不到 `fp.` / `RoundingMode` 之類字樣。
+**所以 Q1（rounding mode 那三個 pattern）走不了 `smt` dialect 這條路**——
+SMT-LIB 標準本身有 FP 理論、z3 也支援，但得直接產生 SMT-LIB 文字丟給 z3，
+繞過 `smt` dialect。
+
+**對 M4 的結論**：分兩條腿。整數用 `smt` dialect（但要先自己補 `ArithToSMT`）；
+浮點直接產 SMT-LIB 餵 z3。
 
 ### Q4：`scaling_extf` / `scaling_truncf` 有沒有 fold 機會？
 
