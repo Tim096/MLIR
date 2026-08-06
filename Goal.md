@@ -21,7 +21,7 @@
 > 決策改變時，**不要刪掉舊決策**——在 §2.4 追加一筆並註明日期與理由。
 > 未來的我們需要知道為什麼轉向，也需要知道當初為什麼那樣想。
 
-最後更新：2026-08-06
+最後更新：2026-08-07
 
 ---
 
@@ -126,6 +126,9 @@ GitHub 上有上萬個，看到的第一反應是「他做完官方教學了」�
 | 2026-08-06 | 開發環境固定在 WSL，不用 Windows | Windows 上要處理 MSVC、路徑長度限制、toolchain 差異，純粹浪費時間 |
 | 2026-08-06 | LLVM source + build 放在 WSL 原生路徑 `~/`，**不放 `/mnt/e/`** | WSL2 存取 Windows 磁碟走 9p 協定，ninja 每次 stat 數萬檔案會慢到無法迭代 |
 | 2026-08-06 | **所有東西一律放 WSL 原生檔案系統**：本 repo 由 `/mnt/e/Side_Project/MLIR` 遷移到 `~/Side_Project/MLIR` | 修正前一列的判斷。原本認為「repo 小，留在 Windows 磁碟無妨」——但橫跨兩個檔案系統會讓路徑、權限（9p 掛載強制 `0777`）、git 的 filemode 偵測、工具鏈設定全都變囉唆。統一在原生路徑一次省掉整類麻煩 |
+| 2026-08-07 | **工作方式改為「能自己講清楚」導向**：每個 patch 送出前，必須做到不看筆記也能回答 reviewer 的提問 | 上游 `AIToolPolicy.md` 明文要求貢獻者要能回答 review 提問，且禁止把 reviewer 的問題轉丟給 LLM。這不只是合規——它也剛好逼出真實能力，正是 §1.1 第一個目標要的東西。連帶確立：`notes/` 的用途是**讓你能答辯**，不是存檔 |
+| 2026-08-07 | 揭露方式用 `Assisted-by:`，**不用 `Co-Authored-By:`** | 後者宣稱 AI 是共同作者，與政策「contributor is always the author」衝突。M0 的 commit 已 amend 修正 |
+| 2026-08-07 | **M2/M3 的 fuzzer 產出要分流**：crash 直接送，「漏最佳化」必須先論證真實世界價值才送 | `InstCombineContributorGuide.md` 明文：「fixes for fuzzer-generated missed optimization reports will likely be rejected if there is no evidence of real-world usefulness」。原本 §5 M2/M3 假設「找到就能送」，這個假設是錯的 |
 
 ---
 
@@ -144,8 +147,11 @@ GitHub 上有上萬個，看到的第一反應是「他做完官方教學了」�
    PR 容易被搶先或被大改動衝掉。
 3. **必經之路**。幾乎所有 pipeline 都會經過 `arith`，改動影響面大，patch 容易被認為有價值。
 
-> 待確認：MLIR 近年 upstream 了 `smt` dialect（從 CIRCT 移入）。若現況仍在，
-> 驗證工具可以建在它之上，不必自己接 Z3 binding。**M4 開始前先確認。**
+> ✅ **已確認（2026-08-07）**：`smt` dialect 在上游，bitvector 理論齊全，
+> 還附 SMT-LIB 匯出器可直接餵 z3。但**沒有浮點理論**（所以 rounding mode
+> 那類題目得繞過它直接產 SMT-LIB），且 `ArithToSMT` conversion 只存在於一個
+> 停擺 17 個月的 draft PR #131484（且該 PR 的 `ceildivsi` 轉換是錯的）。
+> 詳見 [`notes/arith-to-smt-exploration.md`](notes/arith-to-smt-exploration.md)。
 
 ---
 
@@ -157,14 +163,26 @@ GitHub 上有上萬個，看到的第一反應是「他做完官方教學了」�
 ~/Side_Project/MLIR/               ← 本 repo
 ├── Goal.md                        ← 本文件（總綱）
 ├── TODO.md                        ← 交接／接續用的現況快照
+├── mlir-dev.code-workspace        ← 用這個開 VS Code（同時掛上兩個資料夾）
 ├── notes/                         ← 讀 code 的筆記、bug 分析
-│   └── arith-patch-candidates.md
+│   ├── arith-patch-candidates.md
+│   ├── ceildivsi-minint-analysis.md    ← M1 第一發的完整分析
+│   ├── arith-to-smt-exploration.md     ← ArithToSMT 現況與 PR #131484 的缺陷
+│   └── upstream-conventions.md         ← ⭐ 社群怎麼運作（含 AI 政策）
+├── playground/                    ← 隨手試 IR 的地方（刻意不放上游樹裡）
 ├── patches/                       ← 送出去的 patch 的紀錄與說明
 └── tools/                         ← fuzzer / verifier 的原始碼（M2 之後）
 
-~/llvm-project/                    ← LLVM 上游 source
+~/llvm-project/                    ← LLVM 上游 source（主要工作區）
 └── build/                         ← 建置產物
+~/llvm-explore/                    ← git worktree，分支 explore
+                                     用來並行探查，不干擾主線的分支狀態
 ```
+
+> **worktree 的用法**：`git worktree add ~/llvm-explore -b <branch> main`。
+> 探查（讀 code、grep、跑既有的 `mlir-opt`）不需要另建 build；
+> 只有要改 code 驗證時才需要第二個 build 目錄。
+> ⚠️ **兩個 build 目錄不可以同時跑 ninja**，見 `TODO.md` 的坑 2。
 
 ---
 
@@ -199,6 +217,14 @@ GitHub 上有上萬個，看到的第一反應是「他做完官方教學了」�
 
 **M4 — LLVM IR 有 Alive2**（Nuno Lopes / John Regehr 等人），MLIR 這邊沒有等價的成熟工具。
 這層做出來不只是履歷，是**可以投 workshop paper 的東西**。
+
+> ⚠️ **前提修正（2026-08-07）**：「MLIR 這邊什麼都沒有」不精確。
+> 上游已有 `mlir/utils/verify-canon/verify_canon.py`（2024，Ivan Butygin）——
+> 把 canonicalize 前後都 lower 到 LLVM IR，印成可貼進 Alive2 網頁的格式。
+> 但那是 **90 行、要人工複製貼上、樹裡沒有任何東西用它**的 helper，不是工具。
+> 差距在自動化、批次、fuzzer 輸入、CI，以及直接在 MLIR 層驗證（不必先降到 LLVM）。
+> 機會仍然成立，但論述要誠實：是「把既有的手動橋接做成真正的工具」，不是從無到有。
+> 詳見 [`notes/upstream-conventions.md`](notes/upstream-conventions.md) §5。
 
 **M∞ — 說真的，一篇你主筆、社群認真討論過的 RFC，訊號強度不輸 20 個 commit**，
 因為它證明的是設計能力與溝通能力，不只是實作能力。這件事貫穿全程，時機到就做。
@@ -349,9 +375,35 @@ LLVM **已於 2023 年底從 Phabricator 搬到 GitHub PR**。
 
 ### 8.2 硬規則
 
+> 📄 實地調查（讀官方文件 + 統計真實 merged PR + 讀真實 review 往來）的完整結果見
+> [`notes/upstream-conventions.md`](notes/upstream-conventions.md)。
+> 這裡只列不可違反的。
+
 1. **沒有 test 的 PR 不會 merge。** 沒有例外。
 2. Commit title 格式：`[mlir][arith] Fold xxx when yyy`。前綴錯了會被要求改。
+   動詞開頭；結尾的 `(#NNNNN)` 由 GitHub squash-merge 自動加，**自己不要打**。
 3. 送出前跑 `git clang-format HEAD~1`。格式問題被 reviewer 抓到很浪費來回。
+4. **GitHub 帳號的 email 必須公開**（`DeveloperPolicy.md` 明文要求，buildbot 要用它
+   通知建置失敗）。到 https://github.com/settings/emails 關掉
+   "Keep my email addresses private"。
+5. **遵守 `llvm/docs/AIToolPolicy.md`**——見 §8.6，這條牽涉整個專案的工作方式。
+6. **Alive2 證明是社群明文認可的品質訊號**，能附就附（AI 政策文件自己舉它當正面例子）。
+
+### 8.6 AI 工具政策（上游有正式文件，必讀）
+
+`llvm/docs/AIToolPolicy.md`。**工具本身不禁止**，但有硬性條件：
+
+- **人必須在迴圈裡**：送出前你要自己讀過每一行。
+- **你是作者、你負全責。** 標示用 `Assisted-by: <工具名>` trailer，
+  **不要用 `Co-Authored-By:`**——那等於宣稱 AI 是共同作者，跟政策直接衝突。
+- **⭐ 你必須能回答 review 的提問。** 政策原文：
+  「Passing maintainer feedback to an LLM doesn't help anyone grow」。
+  → **這是 `notes/` 存在的真正理由**：不是文件潔癖，是讓你 review 時能自己講清楚。
+  送出前自問：「reviewer 問我為什麼這樣做，我能不看筆記回答嗎？」答不出來就別送。
+- **政策也管 PR 留言與 RFC**，不只 code。且**強烈建議 PR 描述自己寫**。
+- **禁止用 AI 工具處理 `good first issue`**（明文 forbidden）。
+- **「Extractive contribution」**：黃金法則是「貢獻的價值要大於別人 review 它的時間」。
+  不合格會被貼 `extractive` 標籤。**這就是 M0 要挑最小題目的理由。**
 
 ### 8.3 怎麼找 reviewer
 
