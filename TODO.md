@@ -59,17 +59,33 @@
 
 ## 下一步（依序）
 
-### 0. 送 PR 的前置設定 ← **目前真正的卡點**
+### 0. 送 PR 的前置設定
 
-三樣都還沒有，缺一不可：
-
-| 項目 | 現況 | 要做什麼 |
+| 項目 | 現況 | 備註 |
 |---|---|---|
-| GitHub 帳號 + fork | 未知／未建 | fork `llvm/llvm-project` 到自己帳號 |
-| `~/llvm-project` 的 git identity | **空的** | `git config user.name` / `user.email`（送 PR 前不設會 commit 失敗） |
-| `gh` CLI | **未安裝** | `sudo apt install gh` 然後 `gh auth login`（非必要，但 PR 流程會順很多） |
+| git identity | ✅ 已設 | `HungKuan` / `p76091014@gs.ncku.edu.tw`（全域） |
+| GitHub 帳號 | ✅ `hungkuan` | 2014 建立、0 個 public repo。**canonical login 是小寫** |
+| `fork` remote | ✅ 已加 | `https://github.com/hungkuan/llvm-project.git` |
+| **GitHub 上的 fork** | ❌ **還沒建** | 要在瀏覽器或 `gh` 上做，remote 目前指向不存在的 repo |
+| `gh` CLI | ❌ 未安裝 | 要 sudo，Claude 跑不了 |
 
-`~/llvm-project` 目前只有 `origin = llvm/llvm-project`，沒有指向 fork 的 remote。
+**⚠️ email 會永久公開在 LLVM 的 commit 歷史裡。** 現在用的是學校信箱
+`p76091014@gs.ncku.edu.tw`——畢業後可能失效。要換的話**趁還沒送出第一個 PR 之前換掉**，
+送出去就改不掉了（`git config --global user.email <新的>`）。
+
+剩下要人工跑的兩步：
+
+```bash
+# 1. 裝 gh（Ubuntu 22.04 內建的是 2.4.0，有點舊但堪用；下面是官方新版）
+sudo apt install -y gh          # 簡單版
+gh auth login                   # 走瀏覽器 OAuth，不要用密碼
+
+# 2. 建 fork（gh 裝好後一行搞定；--remote-name 對上已經加好的 remote）
+cd ~/llvm-project && gh repo fork --remote=false
+# 或直接去 https://github.com/llvm/llvm-project 按 Fork
+```
+
+`origin` 維持指向 `llvm/llvm-project`（用來 fetch 上游），`fork` 才是我們 push 的地方。
 
 ### 1. ~~先確認沒撞車~~ ✅ 已完成（2026-08-06）
 
