@@ -9,14 +9,14 @@
 >
 > 新 session 開場建議直接說：「讀 Goal.md 和 TODO.md，然後接續」。
 
-最後更新：2026-08-06 23:2x
+最後更新：2026-08-06 23:5x
 
 ---
 
 ## 一句話現況
 
-環境剛建好，`ninja check-mlir` 還在跑。候選 patch 清單已產出，**還沒送出任何 patch**。
-下一步是確認題目沒被別人做走，然後動手做 M0。
+`ninja check-mlir` 跑到 ~670/2269。**撞車查證已完成，兩個題目都確認安全**（見下）。
+還沒送出任何 patch。真正的卡點是 **GitHub 帳號 / fork / git identity 都還沒設定**。
 
 ---
 
@@ -59,10 +59,29 @@
 
 ## 下一步（依序）
 
-### 1. 先確認沒撞車 ← **最優先，動手前一定要做**
+### 0. 送 PR 的前置設定 ← **目前真正的卡點**
 
-到 `github.com/llvm/llvm-project/pulls` 搜 `arith`，
-確認下面選定的題目沒有人已經開 PR 在做。順便搜 issue tracker。
+三樣都還沒有，缺一不可：
+
+| 項目 | 現況 | 要做什麼 |
+|---|---|---|
+| GitHub 帳號 + fork | 未知／未建 | fork `llvm/llvm-project` 到自己帳號 |
+| `~/llvm-project` 的 git identity | **空的** | `git config user.name` / `user.email`（送 PR 前不設會 commit 失敗） |
+| `gh` CLI | **未安裝** | `sudo apt install gh` 然後 `gh auth login`（非必要，但 PR 流程會順很多） |
+
+`~/llvm-project` 目前只有 `origin = llvm/llvm-project`，沒有指向 fork 的 remote。
+
+### 1. ~~先確認沒撞車~~ ✅ 已完成（2026-08-06）
+
+用 GitHub search API 掃過 open PR，結論在下面各題目底下。**兩個題目都安全。**
+
+```bash
+# 用過的查法（gh 沒裝，直接打 API；未認證有 rate limit 但夠用）
+curl -s "https://api.github.com/search/issues?q=repo:llvm/llvm-project+is:pr+is:open+<關鍵字>" \
+  | grep -E '"(number|title)"' | paste - -
+# 看某個 PR 動了哪些檔案 ← 判斷有沒有真的撞到，只看標題會誤判
+curl -s "https://api.github.com/repos/llvm/llvm-project/pulls/<N>/files" | grep '"filename"'
+```
 
 ### 2. M0 — 打通 PR 流程
 
@@ -72,21 +91,69 @@
 但查證後 `AtomicRMWKind` 的 16 個 case 裡只缺 `assign`，而 `assign` 根本不是 reduction
 （沒有單位元素、沒有對應的二元 op）。所以這個 TODO 是寫不完的，該收掉。
 
+**✅ 前提已查證（2026-08-06）**：`AtomicRMWKind` 定義在
+`mlir/include/mlir/Dialect/Arith/IR/ArithBase.td:88-113`，共 16 個 case（0~15）。
+兩處 switch 各自顯式覆蓋 15 個，唯一缺的確實就是 `assign`（#3）。兩處實際位置：
+`getIdentityValueAttr()` 的 switch 尾（~line 3134）與 `getReductionOp()` 的 switch 尾（~line 3229）。
+
+**✅ 撞車查證**：搜 `AtomicRMWKind` 與 `"remaining reduction operations"`，
+唯一同時命中的 open PR 是 #138730，但它只動 Affine/Vector，**完全不碰 `ArithOps.cpp`**。安全。
+
 **做法**：把 `default:` 換成顯式的 `case AtomicRMWKind::assign:`，讓 switch 變窮盡——
 未來有人加新 enum kind 時會得到**編譯錯誤**而不是執行期才靜默報錯。順手刪掉過期 TODO。
 
+> ⚠️ **有個坑，寫的時候別踩**：不能只是把 `default:` 刪掉。
+> 現在的 `default:` 除了接 `assign`，也接「enum 值超出範圍」的情況（例如從 attribute
+> 硬塞進一個非法 int），並對這種情況發出診斷。直接刪掉的話這條路會靜默回傳 `nullptr`，
+> **就不是 NFC 了**，reviewer 會抓。
+>
+> 正確寫法是把診斷移到 switch 之後，兩種情況都還是照樣報錯：
+>
+> ```cpp
+>   case AtomicRMWKind::assign:
+>     break;
+>   }
+>   (void)emitOptionalError(loc, "Reduction operation type not supported");
+>   return nullptr;
+> ```
+>
+> 這樣所有輸入的行為都跟改動前逐字相同（其餘 case 全都是 `return`，不會掉出 switch），
+> 同時獲得 `-Wswitch` 的保護。
+
 - commit title 要加 `[NFC]`
-- 送出前確認沒有其他地方依賴原本 `default:` 的行為
 - **M0 的目標是走完一次 `fork → PR → review → merge`，不是做出有影響力的東西。**
   內容多小都無所謂
 
 ### 3. M1 第一發 — `ceildivsi` 的 MININT folding gap
 
-`mlir/lib/Dialect/Arith/IR/ArithOps.cpp:991`。實作用取負來做 ceiling 除法，
-於是 `a = MININT` 時因取負溢位而整段放棄折疊。改成不取負的算法即可。
+`mlir/lib/Dialect/Arith/IR/ArithOps.cpp:973`（`CeilDivSIOp::fold`，TODO 在 :991）。
+實作用取負來做 ceiling 除法，於是 `a = MININT` 時因取負溢位而整段放棄折疊。
 
-有實際行為改變、好寫 test（直接在 `mlir/test/Dialect/Arith/canonicalize.mlir` 加 case）、
-不會引發設計爭論。
+> 📄 **完整分析已寫成 [`notes/ceildivsi-minint-analysis.md`](notes/ceildivsi-minint-analysis.md)。
+> 動手前讀那份，不要只看這裡的摘要。**（裡面所有結論目前都還是推導，尚未實測。）
+
+摘要三點：
+
+1. **這不是 miscompile，是漏折。** 現行行為正確、只是保守。歷史上的 miscompile 是
+   issue #89382，已用「溢位就 bail」修掉——洞只是從「算錯」降級成「漏折」。
+2. **upstream 自己說這該修。** 除了 `ArithOps.cpp` 的 TODO，
+   `constant-fold.mlir:487` 的測試裡也寫著
+   `// TODO: The folder should be able to fold the following by avoiding
+   intermediate operations that overflow.`
+   ——**測試檔本身就記著這些 case 應該要能折疊**。這不是提新設計，是完成既有意圖。
+3. **範圍比原本以為的大。** 原始 TODO 只提 `a = MININT`，但 `b = MININT`
+   同樣會漏折（如 `ceildivsi(7, -128) : i8` 答案是 `0`，放得下卻不折）。
+   `b` 側沒有任何人記錄過，**這是我們比舊 PR #90855 做得完整的地方**。
+
+⚠️ 這個 patch **會動到既有測試** `@simple_arith.ceildivsi_overflow`
+（它現在斷言 MININT 不折疊）。PR 描述要主動點名，別讓 reviewer 自己發現。
+
+**舊 PR #90855 是機會不是撞車** — 停擺兩年、base 漂掉，卡在 reviewer
+**banach-space（Andrzej Warzyński）** 要求的分析始終沒補上。詳見筆記 §8。
+
+**Reviewer 候選**（`git log --format='%an' -- <file> | sort | uniq -c | sort -rn`）：
+Jakub Kuderski (21)、Ivan Butygin (7)、Victor Perez (6)、Mehdi Amini (6)、
+Matthias Springer (5)、**Andrzej Warzyński (5) ← 這題直接找他**
 
 ### 4. M1 主菜 — rounding mode 安全性（見下面「未解問題」）
 
@@ -163,6 +230,9 @@ round-trip 之類的機會。優先度低。
 - [x] clone LLVM（blobless partial clone，保留完整 commit 歷史供找 reviewer 用）
 - [x] cmake 配置成功
 - [x] 掃描 `arith` 產出候選 patch 清單 → `notes/arith-patch-candidates.md`
+- [x] **撞車查證**：M0（AtomicRMWKind）與 M1 第一發（ceildivsi）都確認安全
+- [x] **ceildivsi 深入分析** → `notes/ceildivsi-minint-analysis.md`
+      （含舊 PR #90855 停擺原因、reviewer 的原話、完整的「哪些該折 / 哪些必須 bail」）
 - [x] 全部遷移到 WSL 原生檔案系統（舊的 `/mnt/e/Side_Project/MLIR` 只剩一張 `MOVED.md`，
       可以直接 `rm -rf` 掉）
 
