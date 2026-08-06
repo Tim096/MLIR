@@ -1,16 +1,25 @@
 # MLIR 專案總綱 (Goal.md)
 
-> **這份文件是什麼**：這個專案的唯一真實來源 (single source of truth)。
-> 它同時是四件事——目標宣言、決策紀錄、MLIR 入門教材、以及「下一步做什麼」的看板。
+> **這份文件是什麼**：專案的**長期真實來源**——目標宣言、決策紀錄、MLIR 入門教材、貢獻 SOP。
+> 講的是**為什麼**，不是「現在做到哪」。
+>
+> **與 `TODO.md` 的分工**（重要，別讓兩邊漂移）：
+>
+> | | `Goal.md`（本檔） | `TODO.md` |
+> |---|---|---|
+> | 內容 | 為什麼這樣做、背景知識、SOP | 現在在哪、下一步、未解問題 |
+> | 改動頻率 | 低（決策變了才改） | 高（每次有進展就改） |
 >
 > **怎麼用**：
-> - 隔了兩週回來忘記在幹嘛 → 讀 §1 和 §5
-> - 想知道「為什麼是這樣做，不是那樣做」 → 讀 §2（含被否決的方案）
+> - 今天要動手 → **直接看 `TODO.md`**，不用讀這份
+> - 隔了兩週回來忘記在幹嘛 → 讀 §1，然後看 `TODO.md`
+> - 想知道「為什麼是這樣做，不是那樣做」 → 讀 §2（含被否決的方案與理由）
 > - 完全不懂 MLIR 的人要接手 → 從 §6 開始讀
-> - 今天要動手 → 直接跳 §5 的「當前狀態」和 §10
+> - 忘記某個指令 → §9
 >
-> **維護規則**：每次有進展就更新 §5 的狀態表與 §10 的下一步。決策改變時，不要刪掉舊決策，
-> 在 §2.4 追加一筆並註明日期與理由——未來的我們需要知道為什麼轉向。
+> **維護規則**：進度更新寫在 `TODO.md`，不要寫在這裡。
+> 決策改變時，**不要刪掉舊決策**——在 §2.4 追加一筆並註明日期與理由。
+> 未來的我們需要知道為什麼轉向，也需要知道當初為什麼那樣想。
 
 最後更新：2026-08-06
 
@@ -115,7 +124,8 @@ GitHub 上有上萬個，看到的第一反應是「他做完官方教學了」�
 | 2026-08-06 | 採用 upstream + 工具閉環，不做純專案也不做純貢獻 | 見 §2.2、§2.3 |
 | 2026-08-06 | 主場 dialect 選 `arith`（後續擴 `vector`） | 見 §3 |
 | 2026-08-06 | 開發環境固定在 WSL，不用 Windows | Windows 上要處理 MSVC、路徑長度限制、toolchain 差異，純粹浪費時間 |
-| 2026-08-06 | LLVM source + build 放在 WSL 原生路徑 `~/`，**不放 `/mnt/e/`** | WSL2 存取 Windows 磁碟走 9p 協定，ninja 每次 stat 數萬檔案會慢到無法迭代。本專案 repo 留在 `/mnt/e/` 沒問題，因為它小 |
+| 2026-08-06 | LLVM source + build 放在 WSL 原生路徑 `~/`，**不放 `/mnt/e/`** | WSL2 存取 Windows 磁碟走 9p 協定，ninja 每次 stat 數萬檔案會慢到無法迭代 |
+| 2026-08-06 | **所有東西一律放 WSL 原生檔案系統**：本 repo 由 `/mnt/e/Side_Project/MLIR` 遷移到 `~/Side_Project/MLIR` | 修正前一列的判斷。原本認為「repo 小，留在 Windows 磁碟無妨」——但橫跨兩個檔案系統會讓路徑、權限（9p 掛載強制 `0777`）、git 的 filemode 偵測、工具鏈設定全都變囉唆。統一在原生路徑一次省掉整類麻煩 |
 
 ---
 
@@ -141,32 +151,38 @@ GitHub 上有上萬個，看到的第一反應是「他做完官方教學了」�
 
 ## §4 我們的 repo
 
+**兩者都在 WSL 原生檔案系統。不要碰 `/mnt/*`（Windows 磁碟）。**
+
 ```
-/mnt/e/Side_Project/MLIR/          ← 本 repo（小、放 Windows 磁碟無妨）
-├── Goal.md                        ← 本文件
+~/Side_Project/MLIR/               ← 本 repo
+├── Goal.md                        ← 本文件（總綱）
+├── TODO.md                        ← 交接／接續用的現況快照
 ├── notes/                         ← 讀 code 的筆記、bug 分析
+│   └── arith-patch-candidates.md
 ├── patches/                       ← 送出去的 patch 的紀錄與說明
 └── tools/                         ← fuzzer / verifier 的原始碼（M2 之後）
 
-~/llvm-project/                    ← LLVM 上游 source（大、必須放 WSL 原生路徑）
+~/llvm-project/                    ← LLVM 上游 source
 └── build/                         ← 建置產物
 ```
 
 ---
 
-## §5 里程碑與當前狀態
+## §5 里程碑
 
 里程碑**不綁日期，綁完成條件**。
 
-| # | 名稱 | 完成條件 | 狀態 |
-|---|---|---|---|
-| **M-1** | 環境就緒 | `ninja check-mlir` 全綠 | 🔵 進行中 |
-| **M0** | 打通流程 | **任何一個** commit 進入 llvm-project main | ⚪ 未開始 |
-| **M1** | 在 arith 站穩 | 3~5 個實質 patch merged，皆在 arith/vector | ⚪ 未開始 |
-| **M2** | Fuzzer v1：crash 獵人 | 工具能自動找到 ≥1 個 upstream crash 並附最小 repro | ⚪ 未開始 |
-| **M3** | Fuzzer v2：miscompile 獵人 | 加上執行 oracle，找到 ≥1 個語意錯誤（算錯，非 crash） | ⚪ 未開始 |
-| **M4** | 語意驗證（Alive2 for MLIR） | 能用 SMT 對 arith 的 folding 規則做等價性證明 | ⚪ 未開始 |
-| **M∞** | Discourse RFC | 一篇主筆的 RFC 被社群認真討論 | ⚪ 未開始 |
+> **目前進行到哪，看 [`TODO.md`](TODO.md)**，不要在這裡記進度。
+
+| # | 名稱 | 完成條件 |
+|---|---|---|
+| **M-1** | 環境就緒 | `ninja check-mlir` 全綠 |
+| **M0** | 打通流程 | **任何一個** commit 進入 llvm-project main |
+| **M1** | 在 arith 站穩 | 3~5 個實質 patch merged，皆在 arith/vector |
+| **M2** | Fuzzer v1：crash 獵人 | 工具能自動找到 ≥1 個 upstream crash 並附最小 repro |
+| **M3** | Fuzzer v2：miscompile 獵人 | 加上執行 oracle，找到 ≥1 個語意錯誤（算錯，非 crash） |
+| **M4** | 語意驗證（Alive2 for MLIR） | 能用 SMT 對 arith 的 folding 規則做等價性證明 |
+| **M∞** | Discourse RFC | 一篇主筆的 RFC 被社群認真討論 |
 
 ### 各里程碑的重點說明
 
@@ -356,6 +372,14 @@ git log --format='%an' -- <file> | sort | uniq -c | sort -rn | head
 2. **找缺的 canonicalization**：打開 `ArithOps.td` 看哪些 op 有 `hasFolder` / `hasCanonicalizer`、
    哪些沒有。想一個明顯的代數恆等式，確認 upstream 沒做，補上 pattern + test。
    **這類 patch 自包含、好 review、社群真心想要。**
+
+   > ⚠️ **實測修正（2026-08-06）**：這招在 `arith` **不管用**——54 個 op 幾乎全都有 folder，
+   > 成熟 dialect 的這條路早被做掉了。真正的縫隙在**第 1 招**：既有 folder 裡被
+   > 明確標註放棄的 case。
+   >
+   > **換到新 dialect 時的正確順序：先掃 TODO/FIXME，再看覆蓋率。**
+   > 覆蓋率掃描的價值不在找到空缺，而在**判斷這個 dialect 有多成熟**——
+   > 越成熟，就越該把力氣放在 TODO 上。
 3. **爛的錯誤訊息**：拿奇怪的 IR 餵 `mlir-opt`，看哪些診斷訊息沒說清楚問題在哪。
    改善診斷是很受歡迎的貢獻。
 4. **issue tracker 的 crash**：搜 `label:mlir crash`，挑沒人認領的，
@@ -397,37 +421,10 @@ git clang-format HEAD~1
 
 ## §10 下一步
 
-> **這一節是活的看板。每次有進展就改這裡。**
-
-### 現在的狀態（2026-08-06）
-- [x] 建立本 repo 與 Goal.md
-- [x] 安裝建置依賴（clang 14 / lld 14 / ninja 1.10 / ccache 4.5 / z3 4.8.12）
-- [x] LLVM clone 完成 — HEAD `27f1aa4c9a42`（2026-08-06）
-- [x] cmake 配置成功
-- [ ] `ninja check-mlir` 全綠 → **M-1 達成**（建置進行中）
-- [x] 產出 `arith` 候選 patch 清單 → [`notes/arith-patch-candidates.md`](notes/arith-patch-candidates.md)
-
-機器規格：16 核 / 31GB RAM / 928GB 可用。
-
-### 掃描結果的重要修正
-
-原本 §8.4 假設「找缺的 canonicalization」是主要題目來源，**這個假設在 `arith` 裡不成立**：
-54 個 op 幾乎全都有 folder，這條路大部分已被做掉。
-
-真正的縫隙是**既有 folder 裡被明確標註放棄的 case**——尤其是
-`ArithCanonicalization.td` 裡三個「不確定在 custom rounding mode 下是否安全」的 TODO。
-那是 upstream 親口承認的未解問題，而且正好是 SMT 可判定的命題，
-與本專案 §2.1 的閉環完美對上。
-
-### 接下來要做的事（依序）
-1. 等 `ninja check-mlir` 跑完 → M-1
-2. **候選 1**（收掉過期 TODO、讓 switch 變 exhaustive，NFC）當 M0 —— 目標是打通流程，不是做大事
-3. **候選 4**（`ceildivsi` 的 MININT folding gap）當 M1 第一發 —— 有實際行為改變、好寫 test
-4. **候選 3**（rounding mode 安全性）當 M1 主菜 —— 同時是 M4 工具的第一個驗證目標
-
-動手前先做 `notes/arith-patch-candidates.md` 的「待辦」第一項：**確認沒有人已經在做**。
-
-### 給未來的自己的提醒
-- 覺得某個 ML 編譯 / 硬體後端的題目很有趣時 → 回去看 §1.3，我們不走那條路
-- 想做「又一個玩具語言」時 → 回去看 §2.3
-- 想一次送很多淺 patch 時 → 回去看 §1.4，深度優先
+> **這一節已搬到 [`TODO.md`](TODO.md)。**
+>
+> 進度、待辦、未解問題一律寫在那裡，不要寫在本檔——
+> 兩邊都記進度必然會漂移，而漂移的文件比沒有文件更糟。
+>
+> 本檔只在**決策改變**時更新（追加 §2.4 的一列），或**學到新的通則**時更新
+> （例如 §8.4 那條實測修正）。
