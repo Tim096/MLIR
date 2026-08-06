@@ -38,13 +38,22 @@
 
 ## 進行中
 
-- [ ] **`ninja check-mlir` 建置＋測試**（背景執行中，PID 5499）
-      - 這是 **M-1 的完成條件**：全綠即達成
-      - 冷啟動、ccache 空的，估計 30~90 分鐘
-      - 檢查是否還活著：`pgrep -a ninja`
-      - 如果中斷了，重跑：`cd ~/llvm-project/build && ninja check-mlir`
-      - ⚠️ 用了 clang 14 當 host compiler（Ubuntu 22.04 內建）。如果編譯失敗抱怨
-        C++ 標準或 host toolchain 版本，改用 gcc-11 或裝新版 clang 再試
+- [ ] **`ninja check-mlir` 建置＋測試** — 這是 **M-1 的完成條件**，全綠即達成
+
+      ```bash
+      # 檢查是否還活著
+      pgrep -a ninja
+      # 看進度
+      tail -20 ~/llvm-project/build/build.log
+      # 中斷了就重跑（ninja 是增量的，加上 ccache，接續很快）
+      cd ~/llvm-project/build && setsid nohup ninja check-mlir > build.log 2>&1 < /dev/null &
+      ```
+
+      - ⚠️ **一定要用 `setsid` 讓它脫離 session**。第一次跑的時候沒有，
+        結果 Claude Code session 結束時整個 build 被帶走，只建到 tblgen 那批就沒了
+      - 冷啟動估計 30~90 分鐘（16 核）
+      - ⚠️ host compiler 是 clang 14（Ubuntu 22.04 內建）。如果編譯失敗抱怨
+        C++ 標準或 host toolchain 版本太舊，改用 gcc-11 或裝新版 clang 再試
 
 ---
 
@@ -154,7 +163,8 @@ round-trip 之類的機會。優先度低。
 - [x] clone LLVM（blobless partial clone，保留完整 commit 歷史供找 reviewer 用）
 - [x] cmake 配置成功
 - [x] 掃描 `arith` 產出候選 patch 清單 → `notes/arith-patch-candidates.md`
-- [x] 全部遷移到 WSL 原生檔案系統
+- [x] 全部遷移到 WSL 原生檔案系統（舊的 `/mnt/e/Side_Project/MLIR` 只剩一張 `MOVED.md`，
+      可以直接 `rm -rf` 掉）
 
 ### 掃描時推翻的一個假設（值得記住）
 
