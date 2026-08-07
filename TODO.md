@@ -15,11 +15,11 @@
 
 ## 一句話現況
 
-**M-1 達成**（`check-mlir` 3838 passed / 0 failed），環境逐項驗收通過，
-PR 流程前置（fork / gh / clang-format 22.1.0 / push 權限）全部就緒。
-撞車查證完成、兩個題目都安全，`ceildivsi` 的分析已用 `mlir-opt` 實證。
+🎉 **M0 的 PR 已送出：https://github.com/llvm/llvm-project/pull/214622**
+（2026-08-07 開，等 review 中。reviewer 自動指派到 **`kuhar` = Jakub Kuderski**，
+`ArithOps.cpp` 的第一大作者，最理想的人選。）
 
-**還沒送出任何 patch。下一步就是動手寫 M0。**
+**現在開始 M1 第一發：`ceildivsi` 的 MININT folding gap。**
 
 ---
 
@@ -28,7 +28,7 @@ PR 流程前置（fork / gh / clang-format 22.1.0 / push 權限）全部就緒�
 | 項目 | 位置／版本 |
 |---|---|
 | 本 repo | `~/Side_Project/MLIR` |
-| LLVM 上游 | `~/llvm-project`，HEAD = `27f1aa4c9a42`（2026-08-06 的 main） |
+| LLVM 上游 | `~/llvm-project`（主要工作區）+ `~/llvm-explore`（worktree，分支 `explore`） |
 | 建置目錄 | `~/llvm-project/build` |
 | 機器 | 16 核 / 31GB RAM / 928GB 可用 |
 | Toolchain | clang 14.0.0、lld 14、ninja 1.10.1、ccache 4.5.1、cmake 3.22.1、z3 4.8.12 |
@@ -41,28 +41,44 @@ PR 流程前置（fork / gh / clang-format 22.1.0 / push 權限）全部就緒�
 
 ## 進行中
 
-- [ ] **M0 patch 已寫好並 commit，等最終驗證** — branch
-      `arith-exhaustive-atomicrmwkind-switch`，commit `94c040ab2631`
+- [ ] **M1 第一發：`ceildivsi` MININT folding gap** ← **現在做這個**
+      見下面「下一步」與 [`notes/ceildivsi-minint-analysis.md`](notes/ceildivsi-minint-analysis.md)
 
-      已完成：
-      - 兩處 switch 改成窮盡，診斷移到 switch 之後（行為逐字不變）
-      - `ninja mlir-opt` 建置成功、零警告
-      - Arith + Transforms 測試 **121/121 passed**
-      - `git clang-format HEAD~1` 乾淨
-      - **實驗證明保護有效**：故意拿掉 `case xori` 後編譯器確實報
-        `warning: enumeration value 'xori' not handled in switch [-Wswitch]`
-        （CI 的 `-Werror` 組態下會是編譯錯誤）
-
-      - ✅ **`check-mlir` 全綠：3838 passed / 0 failed**，與基準線逐項一致（NFC 成立）
-
-      待辦：
-      - [ ] rebase 到最新上游 main
-      - [ ] push 到 fork 並開 PR
+- [ ] **等 M0 的 review** — PR #214622，無需動作，等 `kuhar` 回應。
+      一週沒動靜再禮貌 ping 一次。
 
 - [ ] **決定 ArithToSMT 要怎麼走** — 見 `notes/arith-to-smt-exploration.md` §5。
       建議：先在 PR #131484 留一則有憑有據的意見（具體反例＋上游既有正解位置＋
       指出零測試），看作者反應再決定要不要徵求接手。
       ⚠️ 對外公開動作，送出前要本人確認。
+
+---
+
+## ✅ M0 — 已送出（2026-08-07）
+
+**PR：https://github.com/llvm/llvm-project/pull/214622**
+`[mlir][arith][NFC] Make AtomicRMWKind switches exhaustive`，1 檔 +6 −6。
+
+| 項目 | 結果 |
+|---|---|
+| 建置 | 零警告 |
+| 目標測試（Arith / Transforms / Affine / OpenACC）| 276/276 passed |
+| `check-mlir` | **3839 passed / 0 failed** |
+| `git clang-format` | 乾淨 |
+| CI | 7 項全 pass |
+| labels / reviewer | `mlir`、`mlir:arith` / `kuhar`（皆自動） |
+
+**送出前的關鍵驗證**——拿掉 `default:` 重新編譯，讓 `-Wswitch` 自己列出未處理的值，
+實測兩處各一則、且只有 `assign`。比人工比對可靠，而且 reviewer 可以自行重現。
+
+### reviewer 若提問，要能不看筆記回答
+
+| 提問 | 答案 |
+|---|---|
+| 怎麼確定只缺 `assign`？ | 拿掉 `default:` 編一次，`-Wswitch` 逐一點名。實測只有 `assign` |
+| 真的是 NFC？超出範圍的 enum 值呢？ | 診斷移到 switch 之後，那條路徑照舊得到同一個診斷 |
+| 為何不用 `llvm_unreachable`？ | 那會把超出範圍的值從診斷變成 abort，就不是 NFC。是另一個議題 |
+| `assign` 為什麼存在？ | 在 `memref.atomic_rmw` 有效（lower 成 `xchg`），只是不是 reduction |
 
 ## VS Code 開發環境（2026-08-07 建好）
 
@@ -176,7 +192,7 @@ cannot open shared object file
 | `gh` CLI | ✅ 已裝並 `gh auth login` 完成 |
 | fork | ✅ `Tim096/llvm-project` |
 | `fork` remote | ✅ `https://github.com/Tim096/llvm-project.git` |
-| git identity | ✅ `HungKuan` / `p76091014@gs.ncku.edu.tw`（全域） |
+| git identity | ✅ `Hung-Kuan Tseng` / `p76091014@gs.ncku.edu.tw`（全域） |
 
 `origin` 維持指向 `llvm/llvm-project`（fetch 上游用），`fork` 才是 push 的地方。
 
@@ -184,7 +200,7 @@ cannot open shared object file
 > 那是一個 2014 年建立、0 repo 的**別人的**帳號，remote 一度指錯。
 > 正確做法是直接讀 `gh auth status`，不要猜。
 
-### 兩個還沒定案的個資決定（送出第一個 PR 前要決定，之後改不掉）
+### ~~兩個還沒定案的個資決定~~ ✅ 已定案並用於 PR #214622
 
 1. **email 會永久公開在 LLVM commit 歷史裡。** 現在是學校信箱
    `p76091014@gs.ncku.edu.tw`，畢業後可能失效。
@@ -209,46 +225,7 @@ curl -s "https://api.github.com/search/issues?q=repo:llvm/llvm-project+is:pr+is:
 curl -s "https://api.github.com/repos/llvm/llvm-project/pulls/<N>/files" | grep '"filename"'
 ```
 
-### 2. M0 — 打通 PR 流程
-
-**題目**：`mlir/lib/Dialect/Arith/IR/ArithOps.cpp:3134` 與 `:3229` 的過期 TODO。
-
-兩處 switch 尾端寫著 `// TODO: Add remaining reduction operations.`，
-但查證後 `AtomicRMWKind` 的 16 個 case 裡只缺 `assign`，而 `assign` 根本不是 reduction
-（沒有單位元素、沒有對應的二元 op）。所以這個 TODO 是寫不完的，該收掉。
-
-**✅ 前提已查證（2026-08-06）**：`AtomicRMWKind` 定義在
-`mlir/include/mlir/Dialect/Arith/IR/ArithBase.td:88-113`，共 16 個 case（0~15）。
-兩處 switch 各自顯式覆蓋 15 個，唯一缺的確實就是 `assign`（#3）。兩處實際位置：
-`getIdentityValueAttr()` 的 switch 尾（~line 3134）與 `getReductionOp()` 的 switch 尾（~line 3229）。
-
-**✅ 撞車查證**：搜 `AtomicRMWKind` 與 `"remaining reduction operations"`，
-唯一同時命中的 open PR 是 #138730，但它只動 Affine/Vector，**完全不碰 `ArithOps.cpp`**。安全。
-
-**做法**：把 `default:` 換成顯式的 `case AtomicRMWKind::assign:`，讓 switch 變窮盡——
-未來有人加新 enum kind 時會得到**編譯錯誤**而不是執行期才靜默報錯。順手刪掉過期 TODO。
-
-> ⚠️ **有個坑，寫的時候別踩**：不能只是把 `default:` 刪掉。
-> 現在的 `default:` 除了接 `assign`，也接「enum 值超出範圍」的情況（例如從 attribute
-> 硬塞進一個非法 int），並對這種情況發出診斷。直接刪掉的話這條路會靜默回傳 `nullptr`，
-> **就不是 NFC 了**，reviewer 會抓。
->
-> 正確寫法是把診斷移到 switch 之後，兩種情況都還是照樣報錯：
->
-> ```cpp
->   case AtomicRMWKind::assign:
->     break;
->   }
->   (void)emitOptionalError(loc, "Reduction operation type not supported");
->   return nullptr;
-> ```
->
-> 這樣所有輸入的行為都跟改動前逐字相同（其餘 case 全都是 `return`，不會掉出 switch），
-> 同時獲得 `-Wswitch` 的保護。
-
-- commit title 要加 `[NFC]`
-- **M0 的目標是走完一次 `fork → PR → review → merge`，不是做出有影響力的東西。**
-  內容多小都無所謂
+### 2. ~~M0 — 打通 PR 流程~~ ✅ **已送出 PR #214622**，詳見上面「✅ M0」段落。
 
 ### 3. M1 第一發 — `ceildivsi` 的 MININT folding gap
 

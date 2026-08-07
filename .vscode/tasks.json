@@ -1,0 +1,16 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"type": "cmake",
+			"label": "CMake: 清除重建",
+			"command": "cleanRebuild",
+			"targets": [
+				"[N/A - 選取套件]"
+			],
+			"group": "build",
+			"problemMatcher": [],
+			"detail": "CMake 範本 清除重建 工作"
+		}
+	]
+}
