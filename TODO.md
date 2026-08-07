@@ -15,11 +15,15 @@
 
 ## 一句話現況
 
-🎉 **M0 的 PR 已送出：https://github.com/llvm/llvm-project/pull/214622**
-（2026-08-07 開，等 review 中。reviewer 自動指派到 **`kuhar` = Jakub Kuderski**，
-`ArithOps.cpp` 的第一大作者，最理想的人選。）
+🎉 **兩個 PR 都已送出，等 review 中**（2026-08-07，皆自動指派給
+**`kuhar` = Jakub Kuderski**，`ArithOps.cpp` 的第一大作者）：
 
-**現在開始 M1 第一發：`ceildivsi` 的 MININT folding gap。**
+| PR | 內容 | 狀態 |
+|---|---|---|
+| [#214622](https://github.com/llvm/llvm-project/pull/214622) | M0：`AtomicRMWKind` switch 窮盡（NFC） | open，尚無人回應 |
+| [#214637](https://github.com/llvm/llvm-project/pull/214637) | M1 第一發：`ceildivsi` MININT 折疊 | open，尚無人回應 |
+
+**下一步：等 review（無需動作）+ 找 M1 的第二個題目**（`Goal.md` §5 要 3~5 個）。
 
 ---
 
@@ -41,11 +45,11 @@
 
 ## 進行中
 
-- [ ] **M1 第一發：`ceildivsi` MININT folding gap** ← **現在做這個**
-      見下面「下一步」與 [`notes/ceildivsi-minint-analysis.md`](notes/ceildivsi-minint-analysis.md)
+- [ ] **等兩個 PR 的 review** — #214622 與 #214637，無需動作。
+      一週沒動靜再禮貌 ping 一次（review 延遲是常態，不是針對你）。
 
-- [ ] **等 M0 的 review** — PR #214622，無需動作，等 `kuhar` 回應。
-      一週沒動靜再禮貌 ping 一次。
+- [ ] **找 M1 的第二個題目** — `Goal.md` §5 的 M1 要 3~5 個實質 patch，現在 1 個。
+      候選見 `notes/arith-patch-candidates.md` 與下面「未解問題」的 Q1／Q2／Q4。
 
 - [ ] **決定 ArithToSMT 要怎麼走** — 見 `notes/arith-to-smt-exploration.md` §5。
       建議：先在 PR #131484 留一則有憑有據的意見（具體反例＋上游既有正解位置＋
@@ -227,36 +231,42 @@ curl -s "https://api.github.com/repos/llvm/llvm-project/pulls/<N>/files" | grep 
 
 ### 2. ~~M0 — 打通 PR 流程~~ ✅ **已送出 PR #214622**，詳見上面「✅ M0」段落。
 
-### 3. M1 第一發 — `ceildivsi` 的 MININT folding gap
+### 3. ~~M1 第一發 — `ceildivsi` MININT folding gap~~ ✅ **已送出 PR #214637**
 
-`mlir/lib/Dialect/Arith/IR/ArithOps.cpp:973`（`CeilDivSIOp::fold`，TODO 在 :991）。
-實作用取負來做 ceiling 除法，於是 `a = MININT` 時因取負溢位而整段放棄折疊。
+`[mlir][arith] Fold ceildivsi with MININT operands`，2 commit、2 檔、+81 −74。
 
-> 📄 **完整分析已寫成 [`notes/ceildivsi-minint-analysis.md`](notes/ceildivsi-minint-analysis.md)。
-> 動手前讀那份，不要只看這裡的摘要。**（裡面所有結論目前都還是推導，尚未實測。）
+**做法**：不取負，改用 `sdiv` 往零截斷的性質 + `srem` 判斷是否除盡。
+與上游 `ExpandOps.cpp` 展開 `ceildivsi` 用的公式同構。
 
-摘要三點：
+| 證據 | 內容 |
+|---|---|
+| Alive2 | https://alive2.llvm.org/ce/z/Chnon4 → `Transformation seems to be correct!` |
+| 窮盡測試 | i4 240/240、i8 65280/65280 全對（Python 精確 ceiling 當 oracle）|
+| 改善幅度 | i8 未折疊數 **507 → 1**；兩版折錯皆為 0 |
 
-1. **這不是 miscompile，是漏折。** 現行行為正確、只是保守。歷史上的 miscompile 是
-   issue #89382，已用「溢位就 bail」修掉——洞只是從「算錯」降級成「漏折」。
-2. **upstream 自己說這該修。** 除了 `ArithOps.cpp` 的 TODO，
-   `constant-fold.mlir:487` 的測試裡也寫著
-   `// TODO: The folder should be able to fold the following by avoiding
-   intermediate operations that overflow.`
-   ——**測試檔本身就記著這些 case 應該要能折疊**。這不是提新設計，是完成既有意圖。
-3. **範圍比原本以為的大。** 原始 TODO 只提 `a = MININT`，但 `b = MININT`
-   同樣會漏折（如 `ceildivsi(7, -128) : i8` 答案是 `0`，放得下卻不折）。
-   `b` 側沒有任何人記錄過，**這是我們比舊 PR #90855 做得完整的地方**。
+**兩份證據刻意互補**：Alive2 是符號式證明但只證「與 ExpandOps 一致」，
+萬一 ExpandOps 也錯就一起錯；oracle 掃描則獨立於任何 LLVM 實作。
 
-⚠️ 這個 patch **會動到既有測試** `@simple_arith.ceildivsi_overflow`
-（它現在斷言 MININT 不折疊）。PR 描述要主動點名，別讓 reviewer 自己發現。
+**意外發現**：上游 TODO 只提 `a`（被除數）是 MININT，
+但 `b`（除數）是 MININT 也一樣漏折，且在 507 組中佔 **254 組、超過一半**。
+**這一側從沒有人記錄過**，是本 patch 比停擺的舊 PR #90855 多做到的部分。
 
-**舊 PR #90855 是機會不是撞車** — 停擺兩年、base 漂掉，卡在 reviewer
-**banach-space（Andrzej Warzyński）** 要求的分析始終沒補上。詳見筆記 §8。
+**用到的社群慣例**：precommit test——第一個 commit 只加測試、
+CHECK 反映改動前行為；第二個 commit 才是修正 + CHECK 的 diff。
+這樣 reviewer 一眼看得出哪些行為真的變了。
 
-**Reviewer 候選**（`git log --format='%an' -- <file> | sort | uniq -c | sort -rn`）：
-Jakub Kuderski (21)、Ivan Butygin (7)、Victor Perez (6)、Mehdi Amini (6)、
-Matthias Springer (5)、**Andrzej Warzyński (5) ← 這題直接找他**
+⚠️ 本 patch **動到既有測試** `@simple_arith.ceildivsi_overflow`
+（改名為 `ceildivsi_minint_dividend`），PR 描述已主動點名。
+
+### reviewer 若提問（要能不看筆記回答）
+
+| 提問 | 答案 |
+|---|---|
+| 這是修 bug 嗎？ | 不是。舊版正確但保守，是**漏折疊**不是算錯。折錯數改動前後都是 0 |
+| 為什麼舊版會漏？ | 它先把負數取負變正。`i8` 負數比正數多一個，`-(-128)=128` 放不進去就溢位放棄 |
+| 新演算法為什麼對？ | `sdiv` 往零截斷，答案為負時就等同往上取整；只有同號（答案為正）且除不盡才要補 1 |
+| 還有什麼不折？ | 只剩 `b == 0` 與 `MININT / -1`（後者答案 `-MININT` 本身放不進型別）|
+| 怎麼確定沒漏？ | i4/i8 全窮盡比對數學精確值，不是抽樣 |
 
 ### 4. M1 主菜 — rounding mode 安全性（見下面「未解問題」）
 
