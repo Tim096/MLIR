@@ -23,7 +23,7 @@ M1-b 已實作完成並推上 fork，**PR 尚未開，等本人確認**。
 | [#214622](https://github.com/llvm/llvm-project/pull/214622) | M0：`AtomicRMWKind` switch 窮盡（NFC） | ✅ **已 MERGE**（2026-08-09 15:03，merge commit `78e17e70bd52`） | — |
 | [#214637](https://github.com/llvm/llvm-project/pull/214637) | M1-a：`ceildivsi` MININT 折疊 | open，仍無回應 | — |
 | [#214919](https://github.com/llvm/llvm-project/pull/214919) | M1-b0：`f8E8M0FNU` NaN 被折成 Inf | open，janr-bay LGTM，已轉 @matthias-springer | 全綠 |
-| **（未開）** | **M1-b：`scaling_extf`/`scaling_truncf` 常數折疊** | 分支 `arith-scaling-fold` 已推上 fork，commit `c47e8903caff`。**等本人確認後開 PR** | — |
+| **（未開）** | **M1-b：`scaling_extf`/`scaling_truncf` 常數折疊** | 分支 `arith-scaling-fold` 已推上 fork，commit `7ed6ac835617`。**等本人確認後開 PR** | — |
 
 <details>
 <summary>📜 2026-08-09 當時的狀態（保留供對照）</summary>
@@ -41,8 +41,8 @@ janr-bay 原文：
 
 ### 🔥 M1-b 現況（2026-08-10 完成）
 
-分支 `arith-scaling-fold`，基準 `main = 27f1aa4c9a42`，單一 commit `c47e8903caff`，
-3 檔 **+291 行**。已推上 fork，**PR 還沒開**。
+分支 `arith-scaling-fold`，基準 `main = 27f1aa4c9a42`，單一 commit `7ed6ac835617`，
+3 檔 **+280 行**。已推上 fork，**PR 還沒開**。
 
 完整分析與答辯稿：[`notes/scaling-op-constant-folding.md`](notes/scaling-op-constant-folding.md)
 PR 描述草稿：[`patches/m1b-scaling-fold-pr-body.md`](patches/m1b-scaling-fold-pr-body.md)
@@ -84,8 +84,7 @@ PR 描述草稿：[`patches/m1b-scaling-fold-pr-body.md`](patches/m1b-scaling-fo
 另外本地有一支空分支 `apfloat-e8m0-nan-to-inf`（停在 `main`，0 個 commit，沒推上 fork），
 2026-08-09 已刪。現在本機只剩三支 PR 分支 ＋ `main` ＋ worktree 的 `explore`。
 
-**下一步：M1-b ＝ `arith.scaling_extf` / `scaling_truncf` 折疊**
-（M1-b0 已於 2026-08-08 送出 PR #214919）。
+**下一步：開 M1-b 的 PR（等本人確認）**，之後接 M1-c／M1-d（`vector`）。
 完整題目清單見下面「⭐ 題目清單」。
 
 ### 🔄 2026-08-08 專案轉向（先讀這段，不然下面的題目排序看不懂）
@@ -168,12 +167,11 @@ PR 描述草稿：[`patches/m1b-scaling-fold-pr-body.md`](patches/m1b-scaling-fo
 
 - [x] **🔥 M1-b：`arith.scaling_extf` / `scaling_truncf`（MXFP4/FP8 量化 op）**
       — **2026-08-10 實作完成，見上面「M1-b 現況」。PR 待開。**
-      詳見下面「⭐ 題目清單」的 M1-b。第一步是「先補測試覆蓋」，不是直接寫 folder。
-      已完成的探測：`-arith-expand -canonicalize` 會折、單獨 `-canonicalize` 不會折
-      （＝走硬體 lowering 的 pipeline 拿不到折疊，這是第 1 關的具體證據）。
-      另外查到 `ExpandOps` 與 `ArithToAMDGPU` 對「非 E8M0 的 scale」語意不一致
-      （scale = 1.6 : f16 → 前者 2.0、後者 1.0），折疊要限制在 scale 已是 `f8E8M0FNU`。
-      細節記在 `notes/e8m0-nan-becomes-inf.md` 末段。
+      第 1 關的具體證據（實測）：`-arith-expand -canonicalize` 會折、
+      單獨 `-canonicalize` 不會折 ＝ 走硬體 lowering 的 pipeline 拿不到折疊。
+      `ExpandOps` 與 `ArithToAMDGPU` 對非 E8M0 scale 語意不一致
+      （`1.6 : f16` → 前者 2.0、後者 1.0），所以折疊限制在 scale 已是 `f8E8M0FNU`。
+      完整分析與答辯稿：[`notes/scaling-op-constant-folding.md`](notes/scaling-op-constant-folding.md)。
 
 - [ ] **決定 ArithToSMT 要怎麼走** — 見 `notes/arith-to-smt-exploration.md` §5。
       建議：先在 PR #131484 留一則有憑有據的意見（具體反例＋上游既有正解位置＋
