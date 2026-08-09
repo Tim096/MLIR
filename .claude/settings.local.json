@@ -7,7 +7,15 @@
       "WebFetch(domain:alive2.llvm.org)",
       "Bash(python3 *)",
       "Bash(curl -s --max-time 25 \"https://api.github.com/repos/llvm/llvm-project/pulls/214637\")",
-      "Bash(curl -s --max-time 25 \"https://api.github.com/repos/llvm/llvm-project/pulls/214622\")"
+      "Bash(curl -s --max-time 25 \"https://api.github.com/repos/llvm/llvm-project/pulls/214622\")",
+      "Bash(curl -s --max-time 25 \"https://api.github.com/search/issues?q=repo:llvm/llvm-project+is:pr+is:open&per_page=1\")",
+      "Bash(curl -s --max-time 25 'https://api.github.com/search/issues?q=repo:llvm/llvm-project+is:pr+is:open+label:\"mlir:arith\"&per_page=1')",
+      "Bash(curl -s --max-time 25 \"https://api.github.com/search/issues?q=repo:llvm/llvm-project+is:pr+is:merged+merged:%3E2026-07-31&per_page=1\")",
+      "Bash(curl -s --max-time 25 \"https://api.github.com/search/issues?q=repo:llvm/llvm-project+is:pr+created:%3E2026-07-31&per_page=1\")",
+      "Read(//home/dministrator/llvm-project/**)",
+      "Bash(gh pr *)",
+      "Bash(curl -s \"https://api.github.com/repos/llvm/llvm-project/pulls/117753\")",
+      "Bash(grep *)"
     ]
   }
 }

@@ -43,9 +43,10 @@
 
 ```
 LLVM / MLIR — Upstream Contributor
-• 20+ commits merged into llvm/llvm-project, focused on the arith and vector
-  dialects: folding correctness fixes, missing canonicalization patterns,
-  op verifiers, and diagnostic quality.
+• 20+ commits merged into llvm/llvm-project across the arith and vector
+  dialects — the layers every AI compilation pipeline (torch-mlir, IREE,
+  XLA) lowers through. Work spans microscaling (MXFP4/FP8) quantization
+  op folding, vector canonicalization, and folding-correctness fixes.
   github.com/llvm/llvm-project/commits?author=<you>
 • Authored an RFC on <topic>, discussed and accepted on discourse.llvm.org.
 
@@ -58,10 +59,32 @@ mlir-verify — Semantic Validation for MLIR Transformations
 
 ### 1.3 專案定位
 
-**通用編譯器基礎建設** (compiler infrastructure)。
+> ⚠️ **本節於 2026-08-08 修訂。** 舊定位保留在下方灰底區塊，理由見 §2.4 決策日誌。
 
-明確**不是**：AI/ML 編譯器（XLA、PyTorch compiler 那條路）、硬體後端 / 加速器 codegen。
-這兩條也是好路，但這個專案不走。看到有趣的 ML 編譯題目時請記得這件事，避免被拉走。
+**AI compiler 的中端 codegen 基礎建設**——用「正確性 / 形式驗證」當切入角度。
+
+白話：**題目要長在 AI 模型真的會走過的那條路上**（`linalg` → tiling → `vector` →
+GPU / 量化），但**做的事情**仍然是我們擅長的那種——folder、canonicalization、
+語意正確性、可驗證的證據。
+
+不是改行去做排程調優，是**把既有的強項搬到有人在乎的地段**。
+
+明確**仍然不是**：
+- ❌ 自己寫 model importer / 框架前端（那在 llvm-project 樹外，且是體力活）
+- ❌ 硬體後端 / 特定加速器 ISA codegen（需要拿不到的硬體）
+
+<details>
+<summary>📜 舊定位（2026-08-06 ~ 2026-08-08，已被取代，保留供對照）</summary>
+
+> **通用編譯器基礎建設** (compiler infrastructure)。
+>
+> 明確**不是**：AI/ML 編譯器（XLA、PyTorch compiler 那條路）、硬體後端 / 加速器 codegen。
+> 這兩條也是好路，但這個專案不走。看到有趣的 ML 編譯題目時請記得這件事，避免被拉走。
+
+**為什麼推翻**：這個定位讓題目全部落在 `arith` 的純量算術上。技術上紮實，
+但履歷上寫出來的是「我修了幾個整數 folder」，跟 AI compiler JD 的關鍵字**零重疊**。
+本人 2026-08-08 明確要求：之後每一題都要對應到 AI compiler 真正會用到的東西。
+</details>
 
 ### 1.4 節奏
 
@@ -129,23 +152,68 @@ GitHub 上有上萬個，看到的第一反應是「他做完官方教學了」�
 | 2026-08-07 | **工作方式改為「能自己講清楚」導向**：每個 patch 送出前，必須做到不看筆記也能回答 reviewer 的提問 | 上游 `AIToolPolicy.md` 明文要求貢獻者要能回答 review 提問，且禁止把 reviewer 的問題轉丟給 LLM。這不只是合規——它也剛好逼出真實能力，正是 §1.1 第一個目標要的東西。連帶確立：`notes/` 的用途是**讓你能答辯**，不是存檔 |
 | 2026-08-07 | 揭露方式用 `Assisted-by:`，**不用 `Co-Authored-By:`** | 後者宣稱 AI 是共同作者，與政策「contributor is always the author」衝突。M0 的 commit 已 amend 修正 |
 | 2026-08-07 | **M2/M3 的 fuzzer 產出要分流**：crash 直接送，「漏最佳化」必須先論證真實世界價值才送 | `InstCombineContributorGuide.md` 明文：「fixes for fuzzer-generated missed optimization reports will likely be rejected if there is no evidence of real-world usefulness」。原本 §5 M2/M3 假設「找到就能送」，這個假設是錯的 |
+| **2026-08-08** | **⭐ 定位改為「AI compiler 中端 codegen」**，取代原本的「通用編譯器基礎建設」（§1.3 已修訂，舊版保留） | 本人要求：之後每一題都要對應到 AI compiler JD 真正會用到的東西。舊定位讓題目全部落在純量算術，技術紮實但履歷關鍵字零重疊。**做的事情不變**（folder / 正確性 / 形式驗證），**換的是地段** |
+| **2026-08-08** | 新增 **§8.7 選題四關過濾器**，每個候選題目都要過 | 光有「往 AI 走」的方向不夠——沒有明確的判準，下次還是會憑手感選到 `muli` 那種題目。第 1 關（「真實 AI pipeline 走得到嗎」）是這次新增的硬關卡 |
+| **2026-08-08** | 主場路線定為 **`arith`（量化 op）→ `vector` → `linalg`/GPU**，不直接跳 linalg | ① `kuhar`（現有 reviewer）近一年在 Vector 10 個、Linalg 9 個 commit，往 vector 走是**延續**熟面孔而非重來；② vector 保得住 M2~M4 的 SMT 閉環，linalg 保不住（見 §5 註）；③ `arith` 的 MXFP 量化 op 讓我們**在已經熟的檔案裡**就能拿到 AI 關鍵字 |
+| **2026-08-08** | 推翻 §3 原本「linalg 有一群全職 heavy hitter，PR 容易被搶先」的假設 | 實測近 12 個月：Linalg 183 commit / **69 位不重複作者**，最大作者僅佔 20%。那是**人多**不是**壟斷**。真正壟斷的反而是 Tosa（Luke Hutton 一人佔 51%）。原假設是憑印象寫的，沒有數據 |
 
 ---
 
-## §3 主場：`arith` dialect
+## §3 主場：`arith` → `vector` → `linalg` / GPU
 
 長期投入最大的風險是散彈打鳥。**挑一個 dialect 當主場**，在那裡變成熟面孔，
-遠勝在十個地方各改一行。
+遠勝在十個地方各改一行。但「主場」不等於「永遠只待一個」——**是有順序地往外擴**，
+而且每一步都要跟上一步共用 reviewer 與技能。
 
-選 `arith` 的三個理由：
+### 3.1 路線（2026-08-08 定案）
 
-1. **語意明確且可判定**。`arith` 的每一條 folding / canonicalization 規則，都是一個
-   可以用 SMT solver 驗證的命題（「這個改寫在所有 input 下都保值嗎？」）。
-   這讓工具能從「看它有沒有 crash」升級成「**證明**它改寫錯了」——後者價值差一個量級。
-   這是把 §2.1 閉環真正接起來的關鍵。
-2. **門檻友善但不無聊**。不像 `linalg` / `transform` 那樣有一群全職 heavy hitter 高速迭代，
-   PR 容易被搶先或被大改動衝掉。
-3. **必經之路**。幾乎所有 pipeline 都會經過 `arith`，改動影響面大，patch 容易被認為有價值。
+```
+arith 純量 folder        ← 已做（M0 / M1-a）。技術紮實，AI 關鍵字弱
+   ↓  同一個檔案 ArithOps.cpp，同一個 reviewer
+arith 的 MXFP 量化 op    ← M1-b。在熟悉的地方拿到第一個 AI 關鍵字
+   ↓  scaling op 的 .td 範例本身就配 vector.broadcast，天然接得上
+vector                   ← M1-c/d。AI codegen 的必經之路，138 個 TODO
+   ↓  M2/M3 的 fuzzer 在這裡仍然成立
+linalg / GPU             ← M5+。tiling / fusion / vectorization
+```
+
+### 3.2 為什麼是這個順序
+
+1. **reviewer 關係可以延續，不必重新建立。**
+   實測近 12 個月，`kuhar`（Jakub Kuderski，AMD——**我們兩個 PR 現在的 reviewer**）
+   在 Vector 有 10 個 commit、Linalg 有 9 個。往 vector 走是**同一群人**。
+2. **語意仍然可判定，M2~M4 的閉環保得住。**
+   `arith` 與 `vector` 的 fold / canonicalization 都是「這個改寫保值嗎」的命題，
+   SMT 可判定（vector 多一層 shape 要處理，但不改變性質）。
+   **`linalg` 保不住**——那是排程問題（tiling 怎麼切、fusion 怎麼併），
+   沒有等價性證明可做，oracle 要換成執行前後比對。所以 linalg 排在最後，
+   而且到那裡時 M4 的定義要改寫（見 §5）。
+3. **必經之路。** 幾乎所有 pipeline 都會經過 `arith` 與 `vector`，
+   AI pipeline（torch-mlir / IREE / XLA）尤其如此：
+   `linalg` → tiling → **vectorize** → `vector` → **量化 / GPU**。
+
+### 3.3 一個被實測推翻的舊假設（留著當教訓）
+
+> ❌ 原文：「不像 `linalg` / `transform` 那樣有一群全職 heavy hitter 高速迭代，
+> PR 容易被搶先或被大改動衝掉。」
+
+**數據不支持**（2026-08-08 實測，近 12 個月）：
+
+| dialect | commits | 不重複作者 | 最大作者佔比 |
+|---|---|---|---|
+| Linalg | 183 | **69** | 20% |
+| Vector | 157 | **57** | 12% |
+| Tosa | 134 | 31 | **51%**（Luke Hutton） |
+| Arith | 80 | 41 | — |
+
+Linalg 是 69 個人分 183 個 commit，平均一人 2.6 個——人多不等於壟斷。
+撞車風險較高的是 Tosa。
+
+**方法**：判斷一個 dialect 有多競爭，用數的，不用印象：
+
+```bash
+git log --since="12 months ago" --pretty='%an' -- mlir/lib/Dialect/<D>/ | sort | uniq -c | sort -rn
+```
 
 > ✅ **已確認（2026-08-07）**：`smt` dialect 在上游，bitvector 理論齊全，
 > 還附 SMT-LIB 匯出器可直接餵 z3。但**沒有浮點理論**（所以 rounding mode
@@ -192,15 +260,25 @@ GitHub 上有上萬個，看到的第一反應是「他做完官方教學了」�
 
 > **目前進行到哪，看 [`TODO.md`](TODO.md)**，不要在這裡記進度。
 
-| # | 名稱 | 完成條件 |
-|---|---|---|
-| **M-1** | 環境就緒 | `ninja check-mlir` 全綠 |
-| **M0** | 打通流程 | **任何一個** commit 進入 llvm-project main |
-| **M1** | 在 arith 站穩 | 3~5 個實質 patch merged，皆在 arith/vector |
-| **M2** | Fuzzer v1：crash 獵人 | 工具能自動找到 ≥1 個 upstream crash 並附最小 repro |
-| **M3** | Fuzzer v2：miscompile 獵人 | 加上執行 oracle，找到 ≥1 個語意錯誤（算錯，非 crash） |
-| **M4** | 語意驗證（Alive2 for MLIR） | 能用 SMT 對 arith 的 folding 規則做等價性證明 |
-| **M∞** | Discourse RFC | 一篇主筆的 RFC 被社群認真討論 |
+| # | 名稱 | 完成條件 | AI 關鍵字 |
+|---|---|---|---|
+| **M-1** | 環境就緒 | `ninja check-mlir` 全綠 | — |
+| **M0** | 打通流程 | **任何一個** commit 進入 llvm-project main | — |
+| **M1** | 在 arith / vector 站穩 | 3~5 個實質 patch merged。**其中至少 2 個要過 §8.7 第 1、2 關** | quantization、vectorization |
+| **M2** | Fuzzer v1：crash 獵人 | 工具能自動找到 ≥1 個 upstream crash 並附最小 repro。**輸入涵蓋 `arith` + `vector`** | — |
+| **M3** | Fuzzer v2：miscompile 獵人 | 加上執行 oracle，找到 ≥1 個語意錯誤（算錯，非 crash） | — |
+| **M4** | 語意驗證（Alive2 for MLIR） | 能用 SMT 對 **`arith` + `vector`** 的 folding 規則做等價性證明 | mixed precision |
+| **M5** | 進入 linalg / GPU 層 | ≥2 個 patch merged 在 `linalg` 或 `gpu`，題目與 tiling / fusion / vectorization 相關 | tiling、fusion、GPU codegen |
+| **M∞** | Discourse RFC | 一篇主筆的 RFC 被社群認真討論 | — |
+
+> ⚠️ **M4 → M5 的斷點（2026-08-08 記錄）**：M2~M4 的 fuzzer + SMT 引擎是為
+> **語意可判定**的 dialect 設計的。`arith` 與 `vector` 都成立（fold 是
+> 「這個改寫保值嗎」的命題）。**`linalg` 不成立**——那是排程問題（tiling 怎麼切、
+> fusion 怎麼併），沒有等價性可證。
+>
+> 所以進 M5 時，M4 的工具**不會自動跟過去**。到那裡要嘛把 oracle 換成
+> 「執行前後結果比對」（M3 那條腿還在），要嘛接受 M5 是純 upstream 貢獻、
+> 不靠工具餵題。**現在不必解決，但別到時候才發現。**
 
 ### 各里程碑的重點說明
 
@@ -214,6 +292,10 @@ GitHub 上有上萬個，看到的第一反應是「他做完官方教學了」�
 
 **M3 — crash 好找，算錯難找而且嚴重得多。** 找到一個 arith fold 的 miscompile，
 是可以在 Discourse 上被認真討論的東西。
+
+**M5 — 履歷關鍵字最密集的一層。**
+`linalg` 有 184 個 TODO，但不是每個都在真實 pipeline 上，
+所以第 1 關（§8.7）在這層的過濾強度最高。
 
 **M4 — LLVM IR 有 Alive2**（Nuno Lopes / John Regehr 等人），MLIR 這邊沒有等價的成熟工具。
 這層做出來不只是履歷，是**可以投 workshop paper 的東西**。
@@ -417,6 +499,9 @@ git log --format='%an' -- <file> | sort | uniq -c | sort -rn | head
 
 ### 8.4 怎麼找題目（尤其是第一個）
 
+> 本節是「怎麼找到候選」。找到之後過 §8.7 的四關過濾器。
+> 2026-08-08 以前用本節挖出來的候選，有一半過不了第 1 關。
+
 **別去搶 `good first issue`**，MLIR 的通常幾小時內就被認領。用這幾招自己挖：
 
 1. **挖 TODO / FIXME**：`grep -rn "TODO\|FIXME" mlir/lib/Dialect/Arith/`
@@ -441,6 +526,75 @@ git log --format='%an' -- <file> | sort | uniq -c | sort -rn | head
 
 - **討論設計 / 發 RFC**：`discourse.llvm.org`
 - **快問快答**：LLVM Discord
+
+### 8.7 ⭐ 選題四關過濾器（2026-08-08 新增，每一題都要過）
+
+§8.4 講的是**怎麼找到**候選題目。這節講**找到之後憑什麼留下它**。
+
+四關，缺一不可。任何一關過不了就換題。
+
+---
+
+**第 1 關（最硬，2026-08-08 新增）：這個 op / pass 在真實 AI pipeline 上會被走到嗎？**
+
+不接受「理論上會經過」。必須能**指出具體位置**，例如：
+
+> 「torch-mlir 把 `torch.aten.matmul` 降到 `linalg.matmul`，
+> `-linalg-vectorize` 產生 `vector.contract`，這個 pattern 就在它的 lowering 上」
+
+或
+
+> 「`arith.scaling_extf` 是 OCP MXFP 規格的反量化 op，
+> `ArithToAMDGPU` 把它降到 MI355 的硬體指令，
+> `mlir/test/Integration/Dialect/XeGPU/WG/simple_mxfp_gemm_dequantizeB_F4.mlir`
+> 是一個真的會跑的 MXFP GEMM 整合測試」
+
+**怎麼查**（實際可執行，不是原則）：
+
+```bash
+# 這個 op 有哪些 conversion / 誰在用它
+grep -rln "<OpName>" mlir/lib/Conversion/ mlir/lib/Dialect/
+# 有沒有跑得起來的整合測試（= 有人真的在用）
+grep -rln "<op_asm_name>" mlir/test/Integration/
+```
+
+答不出來就是**沒有第 1 關**，換題。
+
+---
+
+**第 2 關：題目本身說得出 JD 關鍵字嗎？**
+
+寫進履歷的那一行，要包含至少一個：
+`vectorization` / `tiling` / `fusion` / `bufferization` / `quantization` /
+`GPU codegen` / `tensor layout` / `mixed precision`。
+
+判準：這一行給不懂 MLIR 的 recruiter 看，認不認得出是 AI compiler。
+「修了一個 folder」不算；「MXFP4 量化 op 的 constant folding」算。
+
+---
+
+**第 3 關（沿用 §8.6）：不看筆記能答辯嗎？**
+
+上游 `AIToolPolicy.md` 的要求：reviewer 的提問要由貢獻者本人回答。
+
+---
+
+**第 4 關（沿用）：做得出可驗證的證據嗎？**
+
+Alive2 證明 / 窮盡測試 / benchmark 數字，至少一項。
+M1-a 的 `ceildivsi` 就是範本：Alive2 符號式證明 **+** i4/i8 窮盡 oracle 掃描，
+兩份**刻意互補**（Alive2 只證「與 ExpandOps 一致」，oracle 才獨立於 LLVM 實作）。
+
+---
+
+**第 5 步：撞車查證**（每題必做，放在最後）：
+
+```bash
+curl -s "https://api.github.com/search/issues?q=repo:llvm/llvm-project+is:pr+is:open+<關鍵字>" \
+  | grep -E '"(number|title)"' | paste - -
+```
+
+只搜本地 source tree 看不到未 merge 的 PR（`ArithToSMT` 的誤判即出於此，見 `TODO.md` Q3）。
 
 ---
 

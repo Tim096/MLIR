@@ -9,21 +9,128 @@
 >
 > 新 session 開場建議直接說：「讀 Goal.md 和 TODO.md，然後接續」。
 
-最後更新：2026-08-07
+最後更新：2026-08-10
 
 ---
 
 ## 一句話現況
 
-🎉 **兩個 PR 都已送出，等 review 中**（2026-08-07，皆自動指派給
-**`kuhar` = Jakub Kuderski**，`ArithOps.cpp` 的第一大作者）：
+**🎉 M0 里程碑達成——第一個 commit 已進 llvm-project main。**
+M1-b 已實作完成並推上 fork，**PR 尚未開，等本人確認**。
 
-| PR | 內容 | 狀態 |
-|---|---|---|
-| [#214622](https://github.com/llvm/llvm-project/pull/214622) | M0：`AtomicRMWKind` switch 窮盡（NFC） | open，尚無人回應 |
-| [#214637](https://github.com/llvm/llvm-project/pull/214637) | M1 第一發：`ceildivsi` MININT 折疊 | open，尚無人回應 |
+| PR | 內容 | 狀態（2026-08-10 實查） | CI |
+|---|---|---|---|
+| [#214622](https://github.com/llvm/llvm-project/pull/214622) | M0：`AtomicRMWKind` switch 窮盡（NFC） | ✅ **已 MERGE**（2026-08-09 15:03，merge commit `78e17e70bd52`） | — |
+| [#214637](https://github.com/llvm/llvm-project/pull/214637) | M1-a：`ceildivsi` MININT 折疊 | open，仍無回應 | — |
+| [#214919](https://github.com/llvm/llvm-project/pull/214919) | M1-b0：`f8E8M0FNU` NaN 被折成 Inf | open，janr-bay LGTM，已轉 @matthias-springer | 全綠 |
+| **（未開）** | **M1-b：`scaling_extf`/`scaling_truncf` 常數折疊** | 分支 `arith-scaling-fold` 已推上 fork，commit `c47e8903caff`。**等本人確認後開 PR** | — |
 
-**下一步：等 review（無需動作）+ 找 M1 的第二個題目**（`Goal.md` §5 要 3~5 個）。
+<details>
+<summary>📜 2026-08-09 當時的狀態（保留供對照）</summary>
+
+| PR | 內容 | 狀態（2026-08-09 實查） | CI |
+|---|---|---|---|
+| [#214622](https://github.com/llvm/llvm-project/pull/214622) | M0：`AtomicRMWKind` switch 窮盡（NFC） | ✅ **kuhar 已 APPROVE**（14:31，無留言，純批准） | Linux / Windows pass，AArch64 pending |
+| [#214637](https://github.com/llvm/llvm-project/pull/214637) | M1-a：`ceildivsi` MININT 折疊 | open，仍無回應 | — |
+| [#214919](https://github.com/llvm/llvm-project/pull/214919) | M1-b0：`f8E8M0FNU` NaN 被折成 Inf（APFloat miscompile） | 🟡 **janr-bay 說 LGTM**（14:14），但他不是 maintainer，轉手 @matthias-springer | **全綠**（Linux / AArch64 / Windows / macOS arm64 / code_formatter） |
+
+janr-bay 原文：
+> Thanks for the fix. LGTM, but I'm not a maintainer. @matthias-springer could you have a look at this?
+
+</details>
+
+### 🔥 M1-b 現況（2026-08-10 完成）
+
+分支 `arith-scaling-fold`，基準 `main = 27f1aa4c9a42`，單一 commit `c47e8903caff`，
+3 檔 **+291 行**。已推上 fork，**PR 還沒開**。
+
+完整分析與答辯稿：[`notes/scaling-op-constant-folding.md`](notes/scaling-op-constant-folding.md)
+PR 描述草稿：[`patches/m1b-scaling-fold-pr-body.md`](patches/m1b-scaling-fold-pr-body.md)
+驗證工具：[`tools/verify-scaling-fold/verify.py`](tools/verify-scaling-fold/verify.py)
+
+| 驗證 | 結果 |
+|---|---|
+| 窮盡 sweep | **16,785,408 組**，三項檢查（值 vs 展開 oracle、值 vs Python oracle、折/不折決定）**全部 0 分歧** |
+| `check-mlir` | 4450 tests，**3838 passed / 0 failed** |
+| 新增 lit 測試 | 14 個（含 5 個「不該折」的負面測試 ＋ 2 個 poison） |
+| `git clang-format` | 乾淨 |
+| 撞車複查（2026-08-10） | `scaling_extf`／`scaling_truncf` 各 0 筆；`f8E8M0FNU+fold` 命中 #210422，實查只動 `emulate-wide-int.mlir`，**不撞** |
+
+**與原計畫的兩處差異（本人已同意）**：
+
+1. **合成一發，不分兩發。** precommit test 的價值是顯示「哪些既有行為改變了」，
+   但這裡測試全是新增的，且 diff 裡 `hasFolder = 1` 本身就說明先前沒有 folder。
+   要做出可信的 precommit commit 得還原 `.td` 再重建（1085 目標／1.5 小時），來回三小時不划算。
+2. **truncf 的窮盡掃描輸入型別用 `f16` 不是 `f8E4M3FN`。** 展開鏈裡有
+   `extf(scale : f8E8M0FNU → 輸入型別)`，所以輸入必須嚴格寬於 8 bit。
+   組合數因此從 65536 變成 16,777,216。
+
+**2026-08-09 已留的兩則留言：**
+
+1. #214622 — 請 kuhar 代為 merge，署名 `Hung-Kuan Tseng <p76091014@gs.ncku.edu.tw>`
+   （＝ `git config` 的值，三支分支的 commit 本來就都是這個，全部統一）
+2. #214919 — 謝 janr-bay，並 ping @matthias-springer，附四行摘要（為什麼會發生、
+   為什麼看不出來、改動多小、怎麼驗的），另外主動把 `losesInfo` 該不該是 `false`
+   這個不確定點列出來請他判斷
+
+**分支同步狀態（2026-08-09 實查）：**
+
+| 分支 | local | fork | |
+|---|---|---|---|
+| `arith-exhaustive-atomicrmwkind-switch` | 原本 `9ea23028` | `d3cedcc8` | patch-id 相同（`7bf3d4c7`），只是 rebase 基準不同；已把 local 設成 fork 那版 |
+| `arith-ceildivsi-minint-fold` | `73b28d75` | 同 | ✅ |
+| `apfloat-e8m0-nan-convert` | `2ddc0c54` | 同 | ✅ |
+
+另外本地有一支空分支 `apfloat-e8m0-nan-to-inf`（停在 `main`，0 個 commit，沒推上 fork），
+2026-08-09 已刪。現在本機只剩三支 PR 分支 ＋ `main` ＋ worktree 的 `explore`。
+
+**下一步：M1-b ＝ `arith.scaling_extf` / `scaling_truncf` 折疊**
+（M1-b0 已於 2026-08-08 送出 PR #214919）。
+完整題目清單見下面「⭐ 題目清單」。
+
+### 🔄 2026-08-08 專案轉向（先讀這段，不然下面的題目排序看不懂）
+
+本人要求：**之後每一題都要對應到 AI compiler JD 真正會用到的東西。**
+
+| 改了什麼 | 在哪 |
+|---|---|
+| 定位：通用編譯器基建 → **AI compiler 中端 codegen** | `Goal.md` §1.3（舊版保留在摺疊區） |
+| 路線：`arith` 純量 → **`arith` 量化 op → `vector` → `linalg`/GPU** | `Goal.md` §3.1 |
+| **⭐ 選題四關過濾器**（這次的核心產出，每題都要過） | `Goal.md` §8.7 |
+| 里程碑加 M5、標註 M4→M5 的斷點 | `Goal.md` §5 |
+| 決策日誌 4 筆 | `Goal.md` §2.4 |
+
+做的事情沒變（folder、canonicalization、正確性、可驗證證據），換的是地段。
+已送出的兩個 PR 維持不動——它們的產出是流程打通與 reviewer 關係。
+
+`kuhar` 近 12 個月在 **Vector 有 10 個、Linalg 有 9 個** commit，
+所以往 vector 走是同一個 reviewer，關係可以延續。
+
+### ⚠️ 2026-08-08 實查，修正兩筆先前的錯誤紀錄
+
+> **2026-08-09 更新：下面第 1 點已經過期。** premerge CI 現在真的跑了——
+> #214919 的 Linux / AArch64 / Windows / macOS arm64 / code_formatter 全綠，
+> #214622 的 Linux / Windows 也 pass。所以「本機 check-mlir 是唯一證據」這句
+> 對現在的三個 PR 不再成立。下面保留原文當紀錄。
+
+**1.「CI 7 項全 pass」是錯的——真正會建置 MLIR 的 CI 從來沒跑過。**
+兩個 PR 上實際跑過的只有 `automate-prs-labels`（貼 label）、
+`Graphite / mergeability_check`（能不能 merge）、`greeter`（skipped），
+以及 `buildkite/libcxx-ci`（**libcxx，跟 MLIR 無關**，因為沒動到 libcxx 檔案而空過）。
+
+`premerge.yaml`（**Build and Test Linux / Windows**）的狀態是 **`action_required`**
+＝ 卡在「等 maintainer 按 Approve and run workflows」，這是 GitHub 對首次貢獻者的預設閘門。
+`pr-code-format.yml`（clang-format 檢查）同理也沒跑。
+
+**意義：本機的 `check-mlir` 是目前唯一的驗證證據。** 所以每次 rebase 後都要自己重跑。
+
+**2.「M0 的 commit 已 amend 加上 `Assisted-by:`」是錯的。**
+兩支分支的 3 個 commit `git log` 全文 grep 不到任何 `Assisted-by`。
+本人 2026-08-08 決定：**不加揭露**，理由是「內容是自己寫的、每一行都讀過」。
+已代為在兩個 PR 回覆 bot 的政策確認留言（只聲明已讀政策、本人為作者、能答辯，
+未聲稱有無使用工具）。
+⚠️ 政策的「標示」條款觸發條件是「有無 substantial amounts of tool-generated content」，
+與「有沒有自己讀過」是**兩條獨立要求**；此判斷由本人負責，未來若 maintainer 提出可再議。
 
 ---
 
@@ -48,13 +155,38 @@
 - [ ] **等兩個 PR 的 review** — #214622 與 #214637，無需動作。
       一週沒動靜再禮貌 ping 一次（review 延遲是常態，不是針對你）。
 
-- [ ] **找 M1 的第二個題目** — `Goal.md` §5 的 M1 要 3~5 個實質 patch，現在 1 個。
-      候選見 `notes/arith-patch-candidates.md` 與下面「未解問題」的 Q1／Q2／Q4。
+- [x] **M1-b0：`f8E8M0FNU` 的 NaN 被折成 Infinity（APFloat miscompile）**
+      — 做 M1-b 探測邊界時撞到的。**已送出 [PR #214919](https://github.com/llvm/llvm-project/pull/214919)**
+      （分支 `apfloat-e8m0-nan-convert`，基準 `main` = `27f1aa4c9a42`，單一 commit `2ddc0c5d4475`）。
+      `arith.extf` 把 E8M0 的 NaN 常數折成 `+inf`。根因在 `llvm::APFloat::convert`：
+      E8M0 的 `precision = 1`，NaN payload 是 0 個位元，widen 之後 significand 全零
+      ＋ NaN 指數 = 目標格式裡 infinity 的編碼。
+      完整分析、驗證、四關判定：`notes/e8m0-nan-becomes-inf.md`。
+      **這是 M1-b 折疊的前提**（折疊的語意鏈中間就是這個 extf）。
+      本機狀態：`APFloatTest` 186 全過、`ADTTests` 2187 全過、`check-mlir` 3841 全過；
+      拿掉修復後新測試會紅（已實測）。
+
+- [x] **🔥 M1-b：`arith.scaling_extf` / `scaling_truncf`（MXFP4/FP8 量化 op）**
+      — **2026-08-10 實作完成，見上面「M1-b 現況」。PR 待開。**
+      詳見下面「⭐ 題目清單」的 M1-b。第一步是「先補測試覆蓋」，不是直接寫 folder。
+      已完成的探測：`-arith-expand -canonicalize` 會折、單獨 `-canonicalize` 不會折
+      （＝走硬體 lowering 的 pipeline 拿不到折疊，這是第 1 關的具體證據）。
+      另外查到 `ExpandOps` 與 `ArithToAMDGPU` 對「非 E8M0 的 scale」語意不一致
+      （scale = 1.6 : f16 → 前者 2.0、後者 1.0），折疊要限制在 scale 已是 `f8E8M0FNU`。
+      細節記在 `notes/e8m0-nan-becomes-inf.md` 末段。
 
 - [ ] **決定 ArithToSMT 要怎麼走** — 見 `notes/arith-to-smt-exploration.md` §5。
       建議：先在 PR #131484 留一則有憑有據的意見（具體反例＋上游既有正解位置＋
       指出零測試），看作者反應再決定要不要徵求接手。
       ⚠️ 對外公開動作，送出前要本人確認。
+      **⚠️ 過濾器判定：這題過不了 §8.7 第 1／2 關**（AI pipeline 走不到、
+      履歷關鍵字為零）。**降級為 M4 引擎的內部零件，不算 M1 的一發。**
+
+- [ ] **決定 Q1（rounding mode）要怎麼收尾** — 證明已完成（z3，三個 pattern 全證），
+      但撞到 PR #209287。**過濾器判定：過不了第 1／2 關**——AI 推論不設 custom
+      rounding mode。**不當履歷題，改當 M4 的第一個示範案例**（工具能自動吐出
+      `x=-0.0 ∧ RTN` 這個反例，就是 M4 有效的第一個證據）。
+      留言給 #209287 仍值得做（低成本、建立能見度）。⚠️ 對外動作，要本人確認。
 
 ---
 
@@ -268,58 +400,66 @@ CHECK 反映改動前行為；第二個 commit 才是修正 + CHECK 的 diff。
 | 還有什麼不折？ | 只剩 `b == 0` 與 `MININT / -1`（後者答案 `-MININT` 本身放不進型別）|
 | 怎麼確定沒漏？ | i4/i8 全窮盡比對數學精確值，不是抽樣 |
 
-### 4. M1 主菜 — rounding mode 安全性（見下面「未解問題」）
+### ~~4. M1 主菜 — rounding mode 安全性~~ ⬇️ **2026-08-08 降級**
+
+證明已完成（z3，三個 pattern 全證，見下面 Q1），但**過不了 `Goal.md` §8.7 第 1／2 關**
+——AI 推論不設 custom rounding mode，履歷關鍵字為零。
+**改當 M4 驗證器的第一個示範案例**，不當 M1 的一發。
+
+### 4'（新）. M1 主菜 — `scaling_extf` / `scaling_truncf` 的 MXFP 量化折疊
+
+見下面「⭐ 題目清單」的 **M1-b**。
 
 ---
 
 ## 未解問題（有結論就搬進 `notes/`）
 
-### ⭐ Q1：三個 canonicalization 在 custom rounding mode 下到底安不安全？
+### ~~⭐ Q1：三個 canonicalization 在 custom rounding mode 下到底安不安全？~~ ✅ 已解（2026-08-08）
 
-`mlir/lib/Dialect/Arith/IR/ArithCanonicalization.td:562 / 575 / 588`
-三個 pattern 都掛著同一句 upstream 自己寫的話：
+**答案：mul / div 安全，subf 不安全，且 subf 的反例是唯一的一組。**
+用 z3 的 IEEE-754 浮點理論（`QF_FP`）證明，f16 / f32 / f64 三種寬度全跑。
+`rm` 宣告成自由變數 → **一次證完所有捨入模式**，不是逐一列舉。
 
+| Pattern | 結果 |
+|---|---|
+| `MulFOfNegF` | `unsat` = 所有捨入模式下保值 ✅ |
+| `DivFOfNegF` | `unsat` = 所有捨入模式下保值 ✅ |
+| `SubFOfNegZero` | `sat` → 反例 **`x = -0.0` ∧ `roundTowardNegative`**；排除這一組後 `unsat`，代表**整個輸入空間就只有這一組** |
+
+原本的手推結論完全正確，現在有機器證明背書。
+
+> 📄 完整分析、證明腳本、以及可重跑的 `notes/rounding-mode-proofs/run.sh`
+> 見 [`notes/rounding-mode-canonicalization.md`](notes/rounding-mode-canonicalization.md)。
+
+**⚠️ 但這題不能直接開 PR 送**，撞車查證查到
+PR **[#209287](https://github.com/llvm/llvm-project/pull/209287)**
+`[mlir][arith][RFC] Add new strict FP handling in Arith`（`andykaylor`）
+動的正是這三個 pattern：替每個浮點 op 加 `$fenv` 運算元、三個 pattern 各多一道 bail、
+**TODO 原封不動留著**。而且 PR 描述明講現有的 rounding-mode 機制
+「is intended to be **replaced** / should be considered **deprecated**」。
+
+→ 直接送會衝突，而且論述前提可能被抽掉。
+**建議改成在 #209287 留一則有憑有據的意見**（他保留 TODO 又多加 bail，
+代表他也沒驗證；我們正好補上這塊）。⚠️ 對外動作，送出前要本人確認。
+
+### ~~Q2：`arith.muli` 的 overflow TODO 到底想講什麼？~~ ✅ 已結案，**不建議做**（2026-08-08）
+
+`ArithOps.cpp:654` 的 `// TODO: Handle the overflow case.`
+是 **2021 年 `arith` 從 `std` 拆出來時就在的**（`git log -L` 查到，commit `8c08f21b6041`,
+Mogball），**那時 `muli` 根本還沒有 `nsw`/`nuw` flag**。
+
+以今天的語意讀，它指的是「`nsw`/`nuw` 溢位時該折成 poison，而不是折成繞回的常數」。
+但 `ArithOps.cpp` 裡有 **11 處**寫著同一句：
+
+```cpp
+// ... would need the ub dialect to materialize ub.poison; left out for now.
 ```
-// TODO: Verify if this canonicalization is safe when a rounding mode is
-// specified. For the moment, bail on custom rounding modes.
-```
 
-這題跟本專案主軸最契合（見 `Goal.md` §3）：upstream 親口承認的未解問題，
-而且是 SMT 可判定的命題。
+這是上游**反覆做過的刻意決定**，不是疏漏。單獨替 `muli` 補會前後不一致，
+還會引入 `arith` → `ub` 的相依。**那是 RFC 題目，不是 M1 patch。**
 
-**以下是手推的假設，全部尚未驗證，絕對不可直接當結論送出 PR。**
-
-| Pattern | 改寫 | 初步判斷 |
-|---|---|---|
-| `MulFOfNegF` | `mulf(negf x, negf y) → mulf(x, y)` | 可能安全 |
-| `DivFOfNegF` | `divf(negf x, negf y) → divf(x, y)` | 可能安全 |
-| `SubFOfNegZero` | `subf(-0.0, x) → negf(x)` | **可能不安全，疑似有反例** |
-
-**mul / div 可能安全的理由**：`negf` 只翻符號位，是精確運算、不做捨入。
-而 `(-x) × (-y)` 與 `x × y` 的無窮精度真實值**完全相同**。
-既然送進捨入的是同一個實數、捨入模式又相同，結果必然相同。除法同理。
-
-**`subf` 的疑似反例**：取 `x = -0.0`、捨入模式為 round-toward-negative。
-- IEEE 754：兩個同號運算元相減、結果恰為零時，該零的符號在所有捨入模式下是 `+0`，
-  **唯獨 roundTowardNegative 下是 `-0`**
-- 所以 `(-0) - (-0)` 在 RTN 下得 `-0`
-- 但 `negf(-0)` 是 `+0`
-- 兩者不一致 → 改寫在 RTN 下不保值
-
-（另兩種零的情形推起來是相符的：`x = +0` 時兩邊在所有模式下都得 `-0`；
-預設模式 RNE 下 `x = -0` 兩邊也都得 `+0`。所以**今天沒有實際 bug**，
-因為 pattern 目前就是在 custom rounding mode 下放棄。）
-
-**怎麼驗證**：先用實際執行比對（最快），再用 SMT 形式化。
-**這題是 M4 驗證器的完美第一個練習題**——如果工具能自動吐出這個 `-0` 反例，
-就是工具有效的第一個證據。
-
-**價值**：即使結論是「不能放寬」，把反例與理由寫進註解、讓後人不必重推，也是實在的貢獻。
-
-### Q2：`arith.muli` 的 overflow TODO 到底想講什麼？
-
-`ArithOps.cpp:654` 的 `// TODO: Handle the overflow case.`。
-推測跟 `nsw` / `nuw` flag 有關，但**還沒查清楚**。要先搞懂再決定值不值得做。
+（附帶查證：把折成 poison 的 op 折成具體常數**不是 miscompile**——
+poison 可以 refine 成任何值，方向是對的。所以這裡沒有正確性 bug，只是精度較差。）
 
 ### ~~Q3：MLIR 的 `smt` dialect 現在還在嗎？~~ ✅ 已解（2026-08-07）
 
@@ -357,11 +497,219 @@ SMT-LIB 標準本身有 FP 理論、z3 也支援，但得直接產生 SMT-LIB �
 **對 M4 的結論**：分兩條腿。整數用 `smt` dialect（但要先自己補 `ArithToSMT`）；
 浮點直接產 SMT-LIB 餵 z3。
 
-### Q4：`scaling_extf` / `scaling_truncf` 有沒有 fold 機會？
+### ~~Q4：`scaling_extf` / `scaling_truncf` 有沒有 fold 機會？~~ ⬆️ **升為 M1-b 首選**（2026-08-08）
 
-這兩個是全 `arith` 裡**唯二**完全沒有 folder 也沒有 canonicalizer 的 op
-（microscaling 浮點格式相關，較新）。是唯一還空著的地方，值得看一眼有沒有
-round-trip 之類的機會。優先度低。
+原本標「優先度低」。套用 `Goal.md` §8.7 過濾器後**翻成第一名**，
+完整內容見下面「⭐ 題目清單」的 M1-b。
+
+---
+
+## ⭐ 題目清單（2026-08-08 依 `Goal.md` §8.7 四關過濾器重選）
+
+> 四關：**①真實 AI pipeline 走得到？ ②說得出 JD 關鍵字？ ③能不看筆記答辯？ ④做得出可驗證證據？**
+> 表格裡的 ✅／❌ 是**已查證的結論**，不是猜測；查證指令附在各題底下。
+
+### 總表
+
+| # | 題目 | ①AI pipeline | ②JD 關鍵字 | 撞車 | 判定 |
+|---|---|---|---|---|---|
+| M1-a | `ceildivsi` MININT 折疊 | ❌ | ❌ | 無 | ✅ **已送出**，不撤（流程成本） |
+| **M1-b0** | **`f8E8M0FNU` NaN → Inf（APFloat miscompile）** | ✅ | ✅ quantization | **無** | 🔥 **改好了，等確認送出** |
+| **M1-b** | **`scaling_extf`/`scaling_truncf` 折疊** | ✅ | ✅ quantization | **無** | 🔥 **M1-b0 之後** |
+| M1-c | `vector.extract/insert` dynamic position canonicalization | ✅ | ⚠️ 弱 | 待查 | 🟡 備案 |
+| M1-d | vector 的其他 TODO（138 個，待掃） | 待查 | ✅ vectorization | 待查 | 🟡 待掃 |
+| — | `vector.contract` mixed-mode lowering | ✅ | ✅ mixed precision | ❌ **撞車** | ⛔ **不做** |
+| — | Q1 rounding mode（證明已完成） | ❌ | ❌ | ⚠️ #209287 | ⬇️ 降為 M4 示範案例 |
+| — | Q2 `muli` overflow | ❌ | ❌ | — | ⛔ 已結案，不做 |
+| — | ArithToSMT（PR #131484） | ❌ | ❌ | ⚠️ draft 停擺 | ⬇️ 降為 M4 內部零件 |
+
+---
+
+### 🔥 M1-b0：`f8E8M0FNU` 的 NaN 被折成 Infinity（改動已完成，等確認送出）
+
+完整分析在 **`notes/e8m0-nan-becomes-inf.md`**。這裡只留摘要與現況。
+
+**是什麼**：`arith.extf` 把 E8M0 的 NaN 常數（`0xFF`）折成 `+inf`（f32 得 `0x7F800000`）。
+MXFP 規格裡 NaN scale 代表「這個 block 無效」，折成 inf 等於把無效標記換成一個會傳染的巨大數。
+
+**根因**：`llvm::APFloat`。E8M0 的 `precision = 1` → NaN payload 是 0 個位元 →
+widen 時 significand 左移仍是全零 → 「NaN 指數 ＋ 全零 significand」在有 infinity 的
+目標格式裡正好是 inf 的編碼。`APFloat` 物件的 `category` 還是 `fcNaN`（`isNaN()` 回 true），
+但 `bitcastToAPInt()` 吐出 inf 的位元，而 `FloatAttr` 存的就是那串位元。
+
+**改動**（3 個檔案，+62 行）：
+
+| 檔案 | 內容 |
+|---|---|
+| `llvm/lib/Support/APFloat.cpp` | `IEEEFloat::convert()` 的 `fcNaN` 分支加 8 行：來源格式沒有 significand 時，改建目標格式的標準 qNaN |
+| `llvm/unittests/ADT/APFloatTest.cpp` | 新增 `Float8E8M0FNUNaNConvert`，檢 f16/bf16/f32/f64 四個目標的位元圖樣，並把位元讀回來確認仍是 NaN |
+| `mlir/test/Dialect/Arith/canonicalize.mlir` | 新增 `@extFPConstantE8M0NaN` 與 `@extFPVectorConstantE8M0NaN` 兩個 lit 測試 |
+
+**驗證現況**：
+
+| 項目 | 結果 |
+|---|---|
+| 窮盡掃描（256 個 E8M0 值 × f16/bf16/f32/f64/f128） | 0 failures |
+| 拿掉修復後新測試是否會紅 | 會（已實測，`Actual: false / Expected: true`） |
+| `APFloatTest` | 186 全過 |
+| `ADTTests` | 2187 全過 |
+| `check-mlir` | 3841 passed / 0 failed |
+| 撞車查證 | `E8M0+NaN`、`Float8E8M0FNU+convert` 搜 open PR / issue，無相關 |
+
+**已送出**：[PR #214919](https://github.com/llvm/llvm-project/pull/214919)（2026-08-08）。
+分支 `apfloat-e8m0-nan-convert`，基準沿用前兩發的 `main` = `27f1aa4c9a42`，單一 commit。
+送出時的 PR 上還沒有 label（label bot 尚未跑）。
+
+**commit 沒有加任何 AI 揭露 trailer**，沿用 2026-08-08 對前兩發的決定（見上面「實查」段）。
+
+**PR 上已留兩則留言**（2026-08-08）：
+
+1. 回覆 policy bot——沿用前兩發的同一段文字（讀過三份政策、本人為作者、能答辯）
+2. @janr-bay 請他看（他是 PR #204200 動 E8M0 bit 轉換那位），
+   並先講清楚**這個 bug 不是他那個 PR 造成的**：問題在 `IEEEFloat::convert` 的
+   一般 NaN 路徑，比 #204200 更早，只是因為 `Float8E8M0FNU` 是唯一 `precision == 1`
+   的格式才顯現。
+
+其他 APFloat.cpp 活躍作者（還沒 @）：David Majnemer（8）、lntue（5）、Kazu Hirata（5）。
+一週沒動靜再禮貌 ping。
+
+**建置設定被我改過一項**：`build/CMakeCache.txt` 的 `LLVM_BUILD_TESTS` 從 `OFF` 改成 `ON`，
+否則 `ADTTests`（LLVM 自己的 unit test）沒有 target。要還原就 `cmake -DLLVM_BUILD_TESTS=OFF build`。
+
+---
+
+### 🔥 M1-b：`arith.scaling_extf` / `scaling_truncf` 的折疊（M1-b0 之後）
+
+**這是重選後唯一四關全過的題目。**
+
+**① 真實 AI pipeline —— 已查證，不是推測：**
+
+```bash
+grep -rln "ScalingExtF\|ScalingTruncF\|scaling_extf" mlir/lib/ mlir/test/Integration/
+```
+
+查到它的真實用途：
+
+| 證據 | 內容 |
+|---|---|
+| 規格 | `.td` 的 description 直接引用 **OCP MXFP spec**（arxiv 2310.10537），型別是 `f4E2M1FN` / `f8E8M0FNU` |
+| AMD 後端 | `mlir/lib/Conversion/ArithToAMDGPU/ArithToAMDGPU.cpp` —— 降到 MI300/MI355 的硬體指令 |
+| Intel 後端 | `mlir/lib/Conversion/XeGPUToXeVM/XeGPUToXeVM.cpp`、`GPUToXeVMPipeline.cpp` |
+| **會跑的整合測試** | `mlir/test/Integration/Dialect/XeGPU/WG/simple_mxfp_gemm_dequantizeB_F4.mlir` ← **真的是 MXFP GEMM 反量化** |
+
+**白話**：這就是 LLM 低精度推論（FP4/FP8 權重）在 MLIR 裡的那個 op。
+Blackwell 的 FP4、MI355 的 MXFP 走的都是這條。
+
+**② JD 關鍵字**：`quantization`、`mixed precision`、`MXFP4/FP8`。
+履歷可以寫「microscaling (MXFP4/FP8) quantization op folding in upstream MLIR」。
+
+**③ 上游的縫隙有多大 —— 已查證：**
+
+```bash
+grep -n "ScalingExtF\|ScalingTruncF" mlir/lib/Dialect/Arith/IR/ArithOps.cpp
+#   → 只有 areCastCompatible() 和 verify()，沒有 fold()、沒有 canonicalizer
+grep -rn "scaling_extf\|scaling_truncf" mlir/test/Dialect/Arith/*.mlir | cut -d: -f1 | sort | uniq -c
+#   → 42 行，全部在 expand-ops.mlir。canonicalize.mlir 與 constant-fold.mlir 是零
+```
+
+- 全 `arith` **唯二**沒有 folder 也沒有 canonicalizer 的 op
+- **canonicalize / constant-fold 的測試覆蓋是零**
+
+**④ 撞車查證（2026-08-08 實查）：`scaling_extf`、`scaling_truncf`、`arith MXFP`
+三組關鍵字搜 open PR，全部零筆。乾淨。**
+
+#### 動手順序（刻意分兩發，不要一次做完）
+
+**第一發：先補測試覆蓋，不寫任何 folder。**
+在 `mlir/test/Dialect/Arith/canonicalize.mlir` 加 scaling op 的案例，
+CHECK 反映**現在**的行為（也就是「什麼都沒折」）。
+
+理由有三：
+1. 這是上游的 precommit test 慣例，M1-a 已經用過一次，reviewer 認得
+2. 覆蓋率是零，**光補測試本身就是可以獨立 merge 的貢獻**，而且幾乎不會被拒
+3. 有了 baseline，第二發的 diff 才看得出「哪些行為真的變了」
+
+**第二發：實作 folder。以下全部是未驗證的假設，狀態＝待證。**
+
+| 候選改寫 | 待解決的前提 |
+|---|---|
+| `scaling_truncf(scaling_extf(x, s), s) → x` | truncf 會捨入，round-trip 不保證回到原值。需確認成立條件（可能限於 scale 相同且不溢位） |
+| scale 為常數時的 constant fold | 需確認 `f8E8M0FNU` 的常數在 MLIR 裡的表示方式、APFloat 支援度 |
+| scale 對應 `2^0` 時 → 退化成 `extf` / `truncf` | 需查 `f8E8M0FNU` 的 exponent bias |
+| NaN 傳播 | `.td` 明訂「if either scale or the input element is NaN, result is NaN」。常數 NaN 的折疊待驗 |
+
+**驗證方法（沿用 M1-a 的兩份互補證據）**：
+- `f4E2M1FN` 只有 **16 個值**、`f8E8M0FNU` 只有 **256 個值** → **整個輸入空間可以完全窮盡**
+  （16 × 256 = 4096 組，比 M1-a 的 i8 65280 組還小）。這是這題最大的優勢：
+  **不需要 SMT，直接窮盡就是完整證明。**
+- 第二份證據：拿 `-arith-expand-ops` 展開後的結果當 oracle 對照
+  （`ExpandOps.cpp` 的 `ScalingExtFOpConverter` 已讀過，邏輯是
+  `truncf(scale)→f8E8M0FNU` → `extf` 成 `2^scale` → `mulf`）
+
+**要先讀的檔案**：
+```
+mlir/include/mlir/Dialect/Arith/IR/ArithOps.td      :1447 (ScalingExtFOp) / :1632 (ScalingTruncFOp)
+mlir/lib/Dialect/Arith/IR/ArithOps.cpp              :1790 / :1962
+mlir/lib/Dialect/Arith/Transforms/ExpandOps.cpp     ScalingExtFOpConverter
+mlir/test/Dialect/Arith/expand-ops.mlir             現有的 42 行測試
+```
+
+---
+
+### 🟡 M1-c：`vector.extract` / `insert` 的 dynamic position canonicalization
+
+`mlir/lib/Dialect/Vector/IR/VectorOps.cpp` **1478 / 1488 / 1617 / 1633** 四處
+掛著同一句：
+
+```cpp
+// TODO: Canonicalization for dynamic position not implemented yet.
+```
+
+**四處是同一個缺口**（`ExtractFromInsertTransposeChainState` 那條鏈），
+一次補掉是有份量的 patch。
+
+- **① AI pipeline**：✅ vector extract/insert 是 vectorization 之後的產物，必經
+- **② JD 關鍵字**：⚠️ **偏弱**。「vector canonicalization」不如「vectorization」有力
+- **撞車**：**還沒查，動手前必查**
+- **④ 證據**：vector 的 shape 讓窮盡變難，可能要靠 SMT（M4 的工作）
+
+**判定：M1-b 做完再回來評估。** 若 M1-b 順利，可能直接跳到掃 vector 的其他 TODO（M1-d）。
+
+---
+
+### 🟡 M1-d：vector 的其他 TODO（138 個，尚未逐一過濾）
+
+尚未做的事：**把 138 個 TODO 逐一過第 1 關**。
+
+已知較有希望的方向（**都還沒查證，不要當結論**）：
+
+| 位置 | 內容 | 為什麼可能有價值 |
+|---|---|---|
+| `LowerVectorGather.cpp` 114/121/131/139/147 | 五處 gather 的限制（rank > 2、strided、dynamic offset） | gather = embedding lookup / sparse 存取 |
+| `LowerVectorMask.cpp:217` | `vector.mask` passthru 與 `transfer_read` | masking = 向量化迴圈的尾端處理，AI kernel 必用 |
+| `LowerVectorBroadcast.cpp:129` | scalable vector 要用 `scf.for` | scalable = Arm SVE，邊緣推論 |
+
+**掃描指令**：
+```bash
+grep -rn "TODO\|FIXME" mlir/lib/Dialect/Vector/ | grep -viE "remove this|once tests|deprecat"
+```
+
+---
+
+### ⛔ `vector.contract` mixed-mode lowering —— 撞車，不做
+
+`LowerVectorContract.cpp:907` 的 `// TODO: support mixed mode contract lowering.`
+
+**這題四關全過**（mixed precision matmul = 量化推論的核心），**但已經有人在做**：
+
+> **PR [#117753](https://github.com/llvm/llvm-project/pull/117753)**
+> `[mlir][Vector] Support mixed mode vector.contract lowering`
+> 作者 **`Groverkss`**（IREE 開發者）、open、**2024-11-26 開的，2026-03-26 還有更新**。
+
+不是停擺的 draft，是活的 PR。
+
+> 推論：四關全過的題目，別人也篩得出來。過濾器排除的是低價值題目，不排除競爭。
+> 所以撞車查證固定放在每題最後一關（已寫進 `Goal.md` §8.7 第 5 步）。
 
 ---
 
@@ -369,6 +717,10 @@ round-trip 之類的機會。優先度低。
 
 - [x] 決定策略：upstream 為主軸 + 自建 fuzzer/verifier 當引擎（`Goal.md` §2）
 - [x] 選定主場 dialect：`arith`（`Goal.md` §3）
+      → **2026-08-08 改為路線制**：`arith` → `arith` 量化 op → `vector` → `linalg`/GPU
+- [x] **2026-08-08 專案轉向 AI compiler 中端 codegen**，並建立 `Goal.md` §8.7 選題四關過濾器
+- [x] **依過濾器重選所有後續題目** → 見上面「⭐ 題目清單」
+      （M1-b 升為首選、Q1／Q2／ArithToSMT 降級、mixed-mode contract 查出撞車）
 - [x] 建立 repo 與 `Goal.md`
 - [x] 安裝建置依賴
 - [x] clone LLVM（blobless partial clone，保留完整 commit 歷史供找 reviewer 用）

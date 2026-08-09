@@ -1,0 +1,11 @@
+Float16 mulf(negf x, negf y) -> mulf(x, y)          : unsat   (want unsat)
+Float16 divf(negf x, negf y) -> divf(x, y)          : unsat   (want unsat)
+Float16 subf(-0.0, x) -> negf(x)                    : sat (   (define-fun x () Float16     (_ -zero 5 11))   (define-fun rm () RoundingMode     roundTowardNegative) )    (want sat)
+Float16   ^ 排除 (x=-0, RTN) 之後                    : unsat   (want unsat => 反例唯一)
+
+Float32 mulf(negf x, negf y) -> mulf(x, y)          : unsat   (want unsat)
+Float32 divf(negf x, negf y) -> divf(x, y)          : unsat   (want unsat)
+Float32 subf(-0.0, x) -> negf(x)                    : sat (   (define-fun x () Float32     (_ -zero 8 24))   (define-fun rm () RoundingMode     roundTowardNegative) )    (want sat)
+Float32   ^ 排除 (x=-0, RTN) 之後                    : unsat   (want unsat => 反例唯一)
+
+Float64 mulf(negf x, negf y) -> mulf(x, y)          : unsat   (want unsat)
