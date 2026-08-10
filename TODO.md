@@ -15,15 +15,37 @@
 
 ## 一句話現況
 
-**🎉 M0 里程碑達成——第一個 commit 已進 llvm-project main。**
-M1-b 已於 2026-08-10 送出 PR #215123。**四個 PR：1 merged、3 open。**
+**🎉 M0 里程碑達成。第二個 commit 也進去了，而且是 LLVM core（`APFloat.cpp`）。**
+**四個 PR：2 merged、2 open。**
 
-| PR | 內容 | 狀態（2026-08-10 實查） | CI |
+| PR | 內容 | 狀態（2026-08-10 晚間實查） | CI |
 |---|---|---|---|
 | [#214622](https://github.com/llvm/llvm-project/pull/214622) | M0：`AtomicRMWKind` switch 窮盡（NFC） | ✅ **已 MERGE**（2026-08-09 15:03，merge commit `78e17e70bd52`） | — |
-| [#214637](https://github.com/llvm/llvm-project/pull/214637) | M1-a：`ceildivsi` MININT 折疊 | open，仍無回應 | — |
-| [#214919](https://github.com/llvm/llvm-project/pull/214919) | M1-b0：`f8E8M0FNU` NaN 被折成 Inf | open，janr-bay LGTM，已轉 @matthias-springer | 全綠 |
-| [#215123](https://github.com/llvm/llvm-project/pull/215123) | M1-b：`scaling_extf`/`scaling_truncf` 常數折疊 | **2026-08-10 已送出**，已 @ umangyadav（op 原作者）與 kuhar | 待跑 |
+| [#214637](https://github.com/llvm/llvm-project/pull/214637) | M1-a：`ceildivsi` MININT 折疊 | open，自 08-07 送出起**仍無任何回應** | — |
+| [#214919](https://github.com/llvm/llvm-project/pull/214919) | M1-b0：`f8E8M0FNU` NaN 被折成 Inf | ✅ **已 MERGE**（2026-08-10 11:09 UTC，merge commit `794aa0fd923a`） | 全綠 |
+| [#215123](https://github.com/llvm/llvm-project/pull/215123) | M1-b：`scaling_extf`/`scaling_truncf` 常數折疊 | open，尚無回應 | **全綠**（Linux / AArch64 / Windows / code_formatter / LLVM_ABI） |
+
+### ✅ #214919 合併後，已同步修正 #215123 的理由（2026-08-10 晚間）
+
+#215123 原本用「加寬 `f8E8M0FNU` 的 NaN 會得到 inf 的編碼」當作 NaN 特判的理由。
+那句話在它自己的基準（`08cb7d93`，**不含**修復）上是對的，
+但 #214919（`794aa0fd923a`）合併後就不成立了——一旦 rebase 或 merge 到現在的 main，
+註解會變成在描述一個不存在的 bug。
+
+已改成在新舊基準上都成立的理由：**NaN scale 之下結果必為 NaN、與輸入無關，
+所以即使加寬輸入有損也照樣能折**（這本來就是特判比走 convert 多做到的事）。
+
+| 項目 | 內容 |
+|---|---|
+| 改了什麼 | `getScalingCastNaN` 的 doc comment ＋ commit 訊息／PR 描述的同一段 |
+| 程式碼行為 | **完全不變**（NaN 特判在 `convertFloatValue` 之前就攔截，測試不用動） |
+| commit | `439d4601` → **`9ff58a1f`**（force-push，已確認 PR head 對上） |
+| `git clang-format` | 乾淨 |
+
+> ⚠️ **`gh` 2.4.0 太舊，`gh pr edit --body-file` 會撞到 GitHub 的
+> Projects classic 棄用錯誤而靜默失敗**（指令回 0 但描述沒更新）。
+> 改用 `gh api -X PATCH repos/llvm/llvm-project/pulls/<N> -F body=@<file>` 才成功。
+> 下次改 PR 描述直接用 API，並且**一定要回讀確認**。
 
 <details>
 <summary>📜 2026-08-09 當時的狀態（保留供對照）</summary>
