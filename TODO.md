@@ -47,6 +47,53 @@
 > 改用 `gh api -X PATCH repos/llvm/llvm-project/pulls/<N> -F body=@<file>` 才成功。
 > 下次改 PR 描述直接用 API，並且**一定要回讀確認**。
 
+### 🆕 2026-08-10 晚間：同時推進兩條線
+
+本人指示：**選題要以履歷訊號強度為第一判準**，而且要「用聰明的方法找題目」。
+據此排序：**找到 correctness bug > 補缺的 fold > NFC**，且盡量落在 vector 或量化路徑。
+
+#### 線 A：[Issue #215295](https://github.com/llvm/llvm-project/issues/215295)（已送出）
+
+`arith.scaling_extf`／`scaling_truncf` 的 **scale 語意分歧**——同一份 IR，
+兩條 lowering 給出不同數值：
+
+| 路徑 | `scale = 1.6 : f16` 實際變成 |
+|---|---|
+| `-arith-expand`（通用） | **2.0**（`truncf` 到 E8M0，四捨五入到 2 的冪） |
+| `--convert-arith-to-amdgpu`（MI355） | 硬體收到 **1.59960938** 原值 |
+
+**issue 不宣稱誰對誰錯**，因為樹裡每一層都沒記載硬體怎麼解讀 scale：
+`amdgpu.scaled_ext_packed` 只寫「extend and scale」、`llvm.amdgcn.cvt.scalef32.*`
+零註解、`AMDGPUUsage.rst` 沒有條目。所以它問一個具體問題 ＋ 列三種收法。
+cc `@tgymnich`（寫這個轉換的人）、`@krzysz00`、`@kuhar`、`@umangyadav`。
+
+這條線**放著等回應，不卡進度**。有回應再依方向送 patch。
+
+#### 線 B：`vector-masked-transfer-lowering`（進行中）
+
+`LowerVectorTransfer.cpp` 六個 pattern 全部拒絕 masked op。本發做其中兩個。
+完整分析與答辯稿：[`notes/vector-masked-transfer-lowering.md`](notes/vector-masked-transfer-lowering.md)
+
+核心洞見：**mask 不需要任何變換**——transfer 的 mask 活在記憶體維度順序
+（`inferTransferOpMaskType` 用 inverse permutation 映回去），而這兩個改寫
+只重排結果順序。passthru 才要轉置（它活在結果座標系）。
+
+> ⚠️ **M1-c 的舊記錄過期了。** TODO.md 原本寫「四處 TODO 是同一個缺口、
+> 一次補掉是有份量的 patch」。2026-08-10 實查：今天的 main 上是**十處，
+> 分屬 7 個獨立的 fold 常式**，各自要獨立論證，不是一次補完的題目。
+
+**撞車**：PR #200703（open）動同一批函式（0-d guard，非 mask），行號相鄰，
+PR 描述要主動點名。
+
+### ⚠️ 建置狀態的坑（2026-08-10 又踩一次）
+
+在**基準差很遠的兩個分支之間切換**，會讓 build 目錄整批作廢：
+先前為了跑 #215123 的 check-mlir 而在新基準（`08cb7d93`）編過一批物件，
+回到舊基準（`27f1aa4c`）時 ninja 要重建 **3737 個目標**。
+
+**教訓**：往前建到 `origin/main`，不要為了省事回頭接在舊基準上——
+兩個方向成本一樣，但建到新的才會一直有用。vector 分支因此直接開在 `origin/main`。
+
 <details>
 <summary>📜 2026-08-09 當時的狀態（保留供對照）</summary>
 
