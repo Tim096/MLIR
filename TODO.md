@@ -69,7 +69,7 @@ cc `@tgymnich`（寫這個轉換的人）、`@krzysz00`、`@kuhar`、`@umangyada
 
 這條線**放著等回應，不卡進度**。有回應再依方向送 patch。
 
-#### 線 B：`vector-masked-transfer-lowering`（進行中）
+#### 線 B：[PR #215318](https://github.com/llvm/llvm-project/pull/215318)（已送出 2026-08-11）
 
 `LowerVectorTransfer.cpp` 六個 pattern 全部拒絕 masked op。本發做其中兩個。
 完整分析與答辯稿：[`notes/vector-masked-transfer-lowering.md`](notes/vector-masked-transfer-lowering.md)
@@ -82,8 +82,25 @@ cc `@tgymnich`（寫這個轉換的人）、`@krzysz00`、`@kuhar`、`@umangyada
 > 一次補掉是有份量的 patch」。2026-08-10 實查：今天的 main 上是**十處，
 > 分屬 7 個獨立的 fold 常式**，各自要獨立論證，不是一次補完的題目。
 
-**撞車**：PR #200703（open）動同一批函式（0-d guard，非 mask），行號相鄰，
-PR 描述要主動點名。
+**撞車**：PR #200703（open，作者 `SeongjaeP`）動同一批函式（0-d guard，非 mask），
+行號相鄰。已在 PR 描述點名，並在留言 heads-up 給對方。
+
+| 驗證 | 結果 |
+|---|---|
+| 建置 | 3664 目標，零錯誤零警告 |
+| `check-mlir` | **3847 passed / 0 failed**（611 unsupported、1 expectedly failed 皆正常） |
+| 既有測試 | 3 個如預期改變、**4 個維持不變**（屬未改動的 pattern，仍斷言「不支援」） |
+| `git clang-format` | 乾淨 |
+| 改動幅度 | 2 檔，+34 −20 |
+
+**reviewer**：`@banach-space`（Andrzej Warzyński）——他**寫了
+`MaskableOpRewritePattern` 這個基礎設施本身**，也是那個測試檔最大的作者（10 commit）。
+這是「找對人」的範例：不是找檔案的最大作者（這個檔案作者很分散），
+而是找**這個機制的作者**。
+
+**實測驗證了核心推論**：三個案例的 mask 型別改寫前後完全相同
+（`vector<8x4xi1>`、`vector<2x4xi1>`、scalable 的 `vector<2x[4]xi1>`），
+`vector.mask` 的 verifier 也接受了——推論若錯會當場被擋。
 
 ### ⚠️ 建置狀態的坑（2026-08-10 又踩一次）
 
