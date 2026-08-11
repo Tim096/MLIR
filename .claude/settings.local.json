@@ -15,7 +15,8 @@
       "Read(//home/dministrator/llvm-project/**)",
       "Bash(gh pr *)",
       "Bash(curl -s \"https://api.github.com/repos/llvm/llvm-project/pulls/117753\")",
-      "Bash(grep *)"
+      "Bash(grep *)",
+      "Bash(gh issue *)"
     ]
   }
 }

@@ -16,7 +16,7 @@
 ## 一句話現況
 
 **🎉 M0 里程碑達成。第二個 commit 也進去了，而且是 LLVM core（`APFloat.cpp`）。**
-**四個 PR：2 merged、2 open。**
+**四個 PR：2 merged、2 open。兩個 issue：#215295 已有兩位 maintainer 回應、#215445 新開。**
 
 | PR | 內容 | 狀態（2026-08-10 晚間實查） | CI |
 |---|---|---|---|
@@ -52,22 +52,79 @@
 本人指示：**選題要以履歷訊號強度為第一判準**，而且要「用聰明的方法找題目」。
 據此排序：**找到 correctness bug > 補缺的 fold > NFC**，且盡量落在 vector 或量化路徑。
 
-#### 線 A：[Issue #215295](https://github.com/llvm/llvm-project/issues/215295)（已送出）
+#### 線 A：[Issue #215295](https://github.com/llvm/llvm-project/issues/215295)（2026-08-11 已有兩位 maintainer 回應）
 
-`arith.scaling_extf`／`scaling_truncf` 的 **scale 語意分歧**——同一份 IR，
-兩條 lowering 給出不同數值：
-
-| 路徑 | `scale = 1.6 : f16` 實際變成 |
-|---|---|
-| `-arith-expand`（通用） | **2.0**（`truncf` 到 E8M0，四捨五入到 2 的冪） |
-| `--convert-arith-to-amdgpu`（MI355） | 硬體收到 **1.59960938** 原值 |
-
-**issue 不宣稱誰對誰錯**，因為樹裡每一層都沒記載硬體怎麼解讀 scale：
+`arith.scaling_extf`／`scaling_truncf` 的 **scale 語意分歧**。原 issue 不宣稱誰對誰錯，
+只問一個具體問題 ＋ 列三種收法，因為樹裡每一層都沒記載硬體怎麼解讀 scale：
 `amdgpu.scaled_ext_packed` 只寫「extend and scale」、`llvm.amdgcn.cvt.scalef32.*`
-零註解、`AMDGPUUsage.rst` 沒有條目。所以它問一個具體問題 ＋ 列三種收法。
-cc `@tgymnich`（寫這個轉換的人）、`@krzysz00`、`@kuhar`、`@umangyadav`。
+零註解、`AMDGPUUsage.rst` 沒有條目。
 
-這條線**放著等回應，不卡進度**。有回應再依方向送 patch。
+| 回應者 | 內容 |
+|---|---|
+| `@krzysz00` | `V_CVT_SCALEF32_*` **只讀 exponent bits**。傾向在 `ArithToAMDGPU` 拒收非 E8M0 scale，再折掉 truncate + shift |
+| `@tgymnich` | truncf→E8M0 **不該用 round-to-nearest**，正解是 `--arith-expand=include-f8e8m0`（抽 exponent）。**反對拒收**，該改的是文件 |
+
+**問的問題有答案了，但「怎麼修」兩人沒共識**（拒收 vs 改文件），任何 patch 送出去都等於替他們選邊。
+
+⚠️ **原 issue 有一處實質錯誤，已在回覆中更正。** 我拿
+`arith.constant 1.6 : f8E8M0FNU` 折成 `2.0` 當作「folder 四捨五入」的證據，
+但那是**常數屬性 parse 當下就四捨五入**，跟 folder 無關。實測 folder 會拒絕不精確的折疊
+（`convertFloatValue` 的 `losesInfo` 檢查），`--arith-expand --convert-arith-to-llvm` 也確認
+truncf→E8M0 沒有 LLVM conversion，op 原地不動。
+
+**分歧的位置也跟著修正**：硬體只讀 exponent 之後，**兩條 lowering 其實一致（都是 1.0）**，
+落單的是 APFloat 的 round-to-nearest。分歧整個縮回 `arith` 內部：
+
+| `1.6 : f16` → `f8E8M0FNU` | 結果 |
+|---|---|
+| `--arith-expand=include-f8e8m0`（`F8E8M0TruncFOpConverter`，抽 exponent＝往零捨去） | **1.0** |
+| `APFloat::convert`（folder／常數屬性，RNE） | **2.0** |
+
+`kDefaultRoundingMode` 是 `NearestTiesToEven`，但 `F8E8M0TruncFOpConverter`
+一看到 rounding mode 屬性就 bail——**兩邊對「沒寫 rounding mode」的解讀相反**。
+副作用：`arith.truncf %x to_nearest_even : f32 to f8E8M0FNU` 在該 pass 下 fail to legalize，
+**唯一寫得出來的 rounding mode 正好是它拒絕的那個**。
+
+回覆已把問題收窄成這一題並問該改哪一邊，同時直說**讀不懂 krzysz00 的 E5M3 論點**
+（exponent-only 定義下 E5M3 兩條路都會掉 mantissa）。與其猜著回，不如問。
+
+[回覆連結](https://github.com/llvm/llvm-project/issues/215295#issuecomment-5248174927)
+／草稿：[`patches/mxfp-scale-divergence-reply.md`](patches/mxfp-scale-divergence-reply.md)
+
+#### 線 A′：[Issue #215445](https://github.com/llvm/llvm-project/issues/215445)（2026-08-11 新開，查證線 A 時撞到）
+
+`APFloat::convert` 轉進 `f8E8M0FNU` 時**不看 `hasSignedRepr` 也不看 `hasZero`**，
+負數與零都被當成無損轉換。負數會讓 `mlir-opt` 直接 abort：
+
+```mlir
+%c = arith.constant -2.000000e+00 : f8E8M0FNU   // 連 pass 都不用跑
+```
+
+```
+This floating point format does not support signed values
+UNREACHABLE executed at llvm/lib/Support/APFloat.cpp:3178!
+```
+
+| 項目 | 內容 |
+|---|---|
+| 根因 | `IEEEFloat::convert` 只做 `semantics = &toSemantics;`，`sign` 原封不動，回報 `opOK` ＋ `losesInfo == false` |
+| 受害者 | `convertFloatValue`（`ArithOps.cpp:1711`）靠 `losesInfo` 把關，因此放行 |
+| 爆點 | AsmPrinter 印成 `-2.000000e+00` 再 re-parse，撞 `convertFromString` 的 unreachable |
+| reproducer | ① `truncf(-2.0 : f32)` 走 `--canonicalize`；② **完全不跑 pass**，直接寫負的 E8M0 常數 |
+| 零的部分 | 不 crash，但 folder 給 2^-127、expansion 給 `0.0`（同一個根因的另一半，`hasZero == false`） |
+| 基準 | `11799583db91`（乾淨 upstream main，assertions build） |
+
+**第二個 reproducer 是刻意找的**：只有第一個的話，很容易被回成「那是 arith folder 的鍋」。
+
+⚠️ **labels 設不上。** 建 issue 時帶的 `crash / floating-point / llvm:adt / mlir` 被丟掉，
+事後補打 API 回 **403 Must have admin rights**。所以現在只有自動的 `new issue`，
+`issue-subscribers-mlir` 的 bot 不會觸發——已在文末手動
+cc `@tgymnich @krzysz00 @umangyadav @kuhar`，等 triager 上標。
+
+草稿：[`patches/e8m0-negative-sign-issue.md`](patches/e8m0-negative-sign-issue.md)
+
+**兩條線都在等回應。** #215445 表態傾向**回報 loss**（呼叫端本來就都在檢查 `losesInfo`；
+在一個契約就是「回報失真」的函式裡靜默改值不合理），方向確定就能送 patch ＋ 兩個 reproducer 的測試。
 
 #### 線 B：[PR #215318](https://github.com/llvm/llvm-project/pull/215318)（已送出 2026-08-11）
 
@@ -237,9 +294,13 @@ PR 描述（＝ commit 訊息，squash merge 後就是它）：[`patches/m1b-sca
 
 ## 進行中
 
-- [ ] **等三個 PR 的 review** — #214637、#214919、#215123，無需動作。
-      （#214622 已 merge。）一週沒動靜再禮貌 ping 一次——
+- [ ] **等三個 PR 的 review** — #214637、#215123、#215318，無需動作。
+      （#214622、#214919 已 merge。）一週沒動靜再禮貌 ping 一次——
       review 延遲是常態，不是針對你。#214637 開最久（2026-08-07），最接近可以 ping。
+
+- [ ] **等兩個 issue 的方向** — #215295（scale 語意，兩位 maintainer 對怎麼修沒共識）、
+      #215445（`APFloat::convert` 不回報 sign／zero 失真，含 crash）。
+      詳見上面「線 A」與「線 A′」。**方向確定才動手，不要替 maintainer 選邊。**
 
 - [x] **M1-b0：`f8E8M0FNU` 的 NaN 被折成 Infinity（APFloat miscompile）**
       — 做 M1-b 探測邊界時撞到的。**已送出 [PR #214919](https://github.com/llvm/llvm-project/pull/214919)**
