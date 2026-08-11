@@ -18,12 +18,40 @@
 **🎉 M0 里程碑達成。第二個 commit 也進去了，而且是 LLVM core（`APFloat.cpp`）。**
 **四個 PR：2 merged、2 open。兩個 issue：#215295 已有兩位 maintainer 回應、#215445 新開。**
 
-| PR | 內容 | 狀態（2026-08-10 晚間實查） | CI |
+| PR | 內容 | 狀態（2026-08-11 實查） | CI |
 |---|---|---|---|
 | [#214622](https://github.com/llvm/llvm-project/pull/214622) | M0：`AtomicRMWKind` switch 窮盡（NFC） | ✅ **已 MERGE**（2026-08-09 15:03，merge commit `78e17e70bd52`） | — |
-| [#214637](https://github.com/llvm/llvm-project/pull/214637) | M1-a：`ceildivsi` MININT 折疊 | open，自 08-07 送出起**仍無任何回應** | — |
 | [#214919](https://github.com/llvm/llvm-project/pull/214919) | M1-b0：`f8E8M0FNU` NaN 被折成 Inf | ✅ **已 MERGE**（2026-08-10 11:09 UTC，merge commit `794aa0fd923a`） | 全綠 |
-| [#215123](https://github.com/llvm/llvm-project/pull/215123) | M1-b：`scaling_extf`/`scaling_truncf` 常數折疊 | open，尚無回應 | **全綠**（Linux / AArch64 / Windows / code_formatter / LLVM_ABI） |
+| [#214637](https://github.com/llvm/llvm-project/pull/214637) | M1-a：`ceildivsi` MININT 折疊 | open **4 天**，零 review。requested reviewer = `kuhar`。**2026-08-11 已 ping** | 全綠（Linux / Windows / AArch64 / code_formatter / LLVM_ABI） |
+| [#215123](https://github.com/llvm/llvm-project/pull/215123) | M1-b：`scaling_extf`/`scaling_truncf` 常數折疊 | open 2 天，零 review。⚠️ **`dirty`＝有衝突，要 rebase** | ⚠️ **build job 沒跑**（衝突連帶） |
+| [#215318](https://github.com/llvm/llvm-project/pull/215318) | M1-d：transfer permutation lowering 支援 masked op | open 1 天，零 review | 全綠（Linux / Windows / AArch64 / code_formatter / LLVM_ABI） |
+
+### ⚠️ 2026-08-11 實查：#215123 有衝突，而且 CI 記錄已過期
+
+`mergeable_state = dirty`。**衝突只在 `mlir/test/Dialect/Arith/canonicalize.mlir`**：
+#214919（`794aa0fd923a`，08-10 合併）在同一個檔案加了 E8M0 NaN 的測試，
+#215123 也在那裡加測試，兩邊撞在一起。
+
+其餘兩個檔案安全——上游自 2026-08-09 起 `ArithOps.td` 零改動，
+`ArithOps.cpp` 只有本人自己的 #214622（08-09 15:03，**早於** PR head `f9a6792b` 的
+08-09 17:38），所以程式碼本體沒有競爭。
+
+⚠️ **衝突會連帶讓 premerge 不跑**——GitHub 算不出 merge commit，build job 就不啟動。
+現在 `f9a6792b` 上只有 `mergeability_check` / `automate-prs-labels` / `greeter` 三項，
+**沒有任何 build**。TODO 先前記的「#215123 全綠」是**更早的 head**，已過期。
+
+**新資訊**：`kuhar` 在 2026-08-09 23:44:07 加了 reviewer，**13 秒後（23:44:13）自己移除**。
+不知道原因，但代表他看到了這個 PR。
+
+### ⚠️ 2026-08-11 實查：#215318 本地與 fork 不同步
+
+fork 上的分支在 **2026-08-11 07:33 UTC 被 force-push 成 `3eddbc33ed8d`**
+（parent `febf50748eff`，比本地基準新），本地 `vector-masked-transfer-lowering`
+還停在 `5b04e8cdfcda`。**這次 push 不是本 session 做的。**
+
+**內容沒變**：兩個 commit 的 `git patch-id --stable` 都是 `9bf39a9b123c...`，純 rebase。
+本地的 `fork/` remote-tracking ref 先前是舊的，已 `git fetch fork` 更新。
+**要動這條分支前先把本地對齊 `3eddbc33`，不然下次 push 會把 rebase 蓋掉。**
 
 ### ✅ #214919 合併後，已同步修正 #215123 的理由（2026-08-10 晚間）
 
@@ -117,9 +145,10 @@ UNREACHABLE executed at llvm/lib/Support/APFloat.cpp:3178!
 **第二個 reproducer 是刻意找的**：只有第一個的話，很容易被回成「那是 arith folder 的鍋」。
 
 ⚠️ **labels 設不上。** 建 issue 時帶的 `crash / floating-point / llvm:adt / mlir` 被丟掉，
-事後補打 API 回 **403 Must have admin rights**。所以現在只有自動的 `new issue`，
-`issue-subscribers-mlir` 的 bot 不會觸發——已在文末手動
-cc `@tgymnich @krzysz00 @umangyadav @kuhar`，等 triager 上標。
+事後補打 API 回 **403 Must have admin rights**。已在文末手動
+cc `@tgymnich @krzysz00 @umangyadav @kuhar`。
+✅ **2026-08-11 實查：triager 已上標 `llvm:support` / `mlir:arith`。**
+**結論：非 admin 貢獻者設不了 label，交給 triage 就好，不用再試 API。**
 
 草稿：[`patches/e8m0-negative-sign-issue.md`](patches/e8m0-negative-sign-issue.md)
 
@@ -294,12 +323,23 @@ PR 描述（＝ commit 訊息，squash merge 後就是它）：[`patches/m1b-sca
 
 ## 進行中
 
-- [ ] **等三個 PR 的 review** — #214637、#215123、#215318，無需動作。
-      （#214622、#214919 已 merge。）一週沒動靜再禮貌 ping 一次——
-      review 延遲是常態，不是針對你。#214637 開最久（2026-08-07），最接近可以 ping。
+- [ ] **🔥 #215123 要 rebase** — 唯一需要動手的一項。衝突只在 `canonicalize.mlir`
+      （#214919 合併造成，見上面實查）。rebase 完 premerge 才會跑，現在的 head 沒有任何 build 證據。
+      ⚠️ 換基準會讓 build 目錄大量重建，先看「建置狀態的坑」那段。
 
-- [ ] **等兩個 issue 的方向** — #215295（scale 語意，兩位 maintainer 對怎麼修沒共識）、
-      #215445（`APFloat::convert` 不回報 sign／zero 失真，含 crash）。
+- [ ] **#215318 本地對齊 fork** — fork 已是 `3eddbc33`，本地還在 `5b04e8cd`，
+      patch-id 相同（純 rebase）。動這條分支前先對齊。
+
+- [x] **ping #214637** — 2026-08-11 已送出（開了 4 天、零 review）。
+      內容：premerge 現在全綠、仍 clean、patch 未變，並點名唯一動到的既有測試
+      （`ceildivsi_overflow` → `ceildivsi_minint_dividend`）。
+      [留言連結](https://github.com/llvm/llvm-project/pull/214637#issuecomment-5253490654)
+
+- [ ] **等 review** — #215123（先 rebase）、#215318。三個 PR 目前**全部零 review**。
+
+- [ ] **等兩個 issue 的方向** — #215295（scale 語意，兩位 maintainer 對怎麼修沒共識，
+      我的回覆送出後尚無新回應）、#215445（`APFloat::convert` 不回報 sign／zero 失真，含 crash，
+      **triager 已上標 `llvm:support` / `mlir:arith`**，零回應）。
       詳見上面「線 A」與「線 A′」。**方向確定才動手，不要替 maintainer 選邊。**
 
 - [x] **M1-b0：`f8E8M0FNU` 的 NaN 被折成 Infinity（APFloat miscompile）**
