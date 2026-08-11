@@ -16,15 +16,17 @@
 ## 一句話現況
 
 **🎉 M0 里程碑達成。第二個 commit 也進去了，而且是 LLVM core（`APFloat.cpp`）。**
-**五個 PR：2 merged、3 open。#214637 拿到第一份真正的 code review（`kuhar`），已回應並推修正。**
+**五個 PR：2 merged、3 open，第六個待開。#214637（`kuhar`，兩輪）與 #215318（`banach-space`）
+都拿到 code review，兩邊要求的修正**本地都做完了，等 push ＋ 回覆**。**
 
 | PR | 內容 | 狀態（2026-08-12 實查） | CI |
 |---|---|---|---|
 | [#214622](https://github.com/llvm/llvm-project/pull/214622) | M0：`AtomicRMWKind` switch 窮盡（NFC） | ✅ **已 MERGE**（2026-08-09 15:03，merge commit `78e17e70bd52`） | — |
 | [#214919](https://github.com/llvm/llvm-project/pull/214919) | M1-b0：`f8E8M0FNU` NaN 被折成 Inf | ✅ **已 MERGE**（2026-08-10 11:09 UTC，merge commit `794aa0fd923a`） | 全綠 |
-| [#214637](https://github.com/llvm/llvm-project/pull/214637) | M1-a：`ceildivsi` MININT 折疊 | **`kuhar` 2026-08-11 15:06 review 了**，兩點都已處理並推上（head `c67814fef49a`，4 個 commit）。已回覆 | 重跑中 |
+| [#214637](https://github.com/llvm/llvm-project/pull/214637) | M1-a：`ceildivsi` MININT 折疊 | `kuhar` **兩輪** review。第二輪要求拆走 `inferCeilDivS`，**已照辦**：本地 head `a1c2690f7d79`，3 個 commit，**尚未 push** | 待重跑 |
 | [#215123](https://github.com/llvm/llvm-project/pull/215123) | M1-b：`scaling_extf`/`scaling_truncf` 常數折疊 | 衝突已解（rebase，head `6319069bfd7b`），`mergeable=true`。描述已同步。零 review | **全綠**（Linux / Windows / AArch64 / code_formatter / LLVM_ABI） |
-| [#215318](https://github.com/llvm/llvm-project/pull/215318) | M1-d：transfer permutation lowering 支援 masked op | open 2 天，零 review | 全綠（Linux / Windows / AArch64 / code_formatter / LLVM_ABI） |
+| [#215318](https://github.com/llvm/llvm-project/pull/215318) | M1-d：transfer permutation lowering 支援 masked op | **`banach-space` 2026-08-11 18:27 review 了**（三點）。本地已全部處理，**尚未 push** | 全綠（舊 head `3eddbc33`） |
+| （未開） | 從 #214637 拆出：`index`／inference 的 `ceildivs` INT_MIN 一致性 | 分支 `index-ceildivs-intmin`，3 個 commit，本地驗證完畢 | — |
 
 ### ✅ 2026-08-12：#215123 的衝突已解
 
@@ -94,6 +96,70 @@ $ mlir-opt cd2.mlir -int-range-optimizations      →  斷言 == +7754212542（�
 ⚠️ **`InferIntRangeCommon.cpp` 在 `MLIRInterfaceUtils` 裡，動它要重編 ~1500 個 target**（約 25 分鐘），
 不是只編幾個檔案。另外 sweep 跑的時候**不能 rebuild**——`bin/mlir-opt` 會被換掉，
 sweep 每次都是重新 spawn，結果會被污染。
+
+### 🔥 2026-08-12 晚：kuhar 第二輪 review → `inferCeilDivS` 拆成獨立 PR
+
+15:06 那輪之後，`kuhar` 18:39 又留了一則（`InferIntRangeCommon.cpp:381`）：
+`inferCeilDivS` 不只 `arith` 在用，`index::CeilDivSOp` 也用，而 index 那邊
+沒有跟上——`calculateCeilDivS` 與 `ConvertIndexCeilDivS` 都還是 `-(-n / m)`。
+他給的可觀察後果：`-int-range-optimizations -canonicalize` 把
+`index.cmp sle(index.ceildivs(-2147483648, 7), 0)` 折成 `true`，
+但 `--convert-index-to-llvm=index-bitwidth=32` 產出的碼在執行期是 false。
+**二選一：這發一起修 index，或把共用的 inference 改動拆走。**
+
+**選了拆走**，理由：他要的是「inference 改的時候 index 必須已經一致」，
+拆兩個 PR 反而要跨 PR 追蹤；而且能讓 #214637 維持原本的小範圍。
+
+| 分支 | 內容 |
+|---|---|
+| `arith-ceildivsi-minint-fold` | rebase 掉 `a2053d64062c`，剩 3 個 commit，只動 `ArithOps.cpp` ＋ `constant-fold.mlir`。新 head `a1c2690f7d79`（舊的留在 `backup/ceildiv-with-inference-0812`） |
+| `index-ceildivs-intmin`（新，基準 `a558267da71f`） | `141bc15b` index folder ＋ lowering 不再 negate → `a080792b` 刪 inference 兩層 workaround → `b98eff9e` 32-bit 回歸測試 |
+
+commit 順序刻意如此：**每一個 commit 之後樹裡都沒有不一致**。
+
+實測（同一個基準，改動前 vs 改動後）：
+
+| | 改動前 | 改動後 |
+|---|---|---|
+| `-canonicalize` 折 `index.ceildivs(-2147483648, 7)` | 不折 | `-306783378` |
+| `-canonicalize` 折 `index.ceildivs(-2147483648, -1)` | `2147483648` | 不折 |
+| `-int-range-optimizations` 對 kuhar 的例子 | 無法證明 | `true` |
+
+**`ceildivs(INT_MIN, -1)` 從折變不折，是刻意的**：在 32-bit 上精確結果 `2^31`
+不可表示，舊算法只是因為修正項 wrap 回 `INT_MIN`、剛好等於 64-bit 結果的截斷，
+才通過 `foldBinaryOpChecked` 的一致性檢查。lowering 那邊發的是
+`sdiv INT_MIN, -1`（poison），而 `arith.ceildivsi` 對同一情況本來就不折。
+
+**新加的 32-bit 回歸測試單獨驗過**：只還原 `InferIntRangeCommon.cpp` 重編後它會 fail，
+所以釘住的是 inference 而不是 folder。`check-mlir` 3848 passed / 0 failed。
+
+草稿：[`patches/index-ceildivs-intmin-pr-body.md`](patches/index-ceildivs-intmin-pr-body.md)
+／回覆稿 [`patches/ceildivsi-split-reply.md`](patches/ceildivsi-split-reply.md)
+
+### ✅ 2026-08-12 晚：#215318 拿到 banach-space 的 review，三點都已處理
+
+`@banach-space`（`MaskableOpRewritePattern` 的作者）2026-08-11 18:27 回了，
+總評 "Makes sense, thank you!"，三點：
+
+| 位置 | 內容 | 處理 |
+|---|---|---|
+| `LowerVectorTransfer.cpp:143` | 註解「…and does.」問是不是漏字 | 改成「Its mask is indexed in memory order, so only the passthru has to be transposed.」 |
+| `LowerVectorTransfer.cpp:149` | 要一個帶 passthru 的測試 | 加 `@xfer_read_minor_identity_transposed_masked_with_passthru` |
+| review body | "Will there be follow-ups?" | 要回答（見下） |
+
+**新測試刻意用三維旋轉**：既有的 masked read 測試都是 `[0, 2, 1]`，
+**自反**，所以分不出 `invertPermutationVector(transposePerm)` 和 `transposePerm`。
+新測試用 `(d0, d1, d2) -> (d2, d0, d1)`，permutation `[2, 0, 1]`，inverse `[1, 2, 0]`。
+**驗證過**：把 `invertPermutationVector` 拿掉重編，該測試會 fail。
+
+本地 head `d0170cd77b5c`（增量 commit，**不要 amend** `3eddbc33`，
+否則 banach-space 的 inline review 會脫節）。`check-mlir` 3848 passed / 0 failed，
+`git clang-format` 乾淨。
+
+"Will there be follow-ups?" **不是技術問題，是在問計畫**——PR 描述說有兩個 pattern
+留給後續，他想知道會不會真的做。回覆稿裡答「會，而且那兩個的 mask 需要變換
+不是直通，各自要獨立論證」。草稿：
+[`patches/vector-masked-transfer-review-reply.md`](patches/vector-masked-transfer-review-reply.md)
 
 ### ⚠️ 2026-08-11 實查：#215318 本地與 fork 不同步
 
@@ -367,19 +433,28 @@ PR 描述（＝ commit 訊息，squash merge 後就是它）：[`patches/m1b-sca
 
 ## 進行中
 
-- [ ] **🔥 #215123 要 rebase** — 唯一需要動手的一項。衝突只在 `canonicalize.mlir`
-      （#214919 合併造成，見上面實查）。rebase 完 premerge 才會跑，現在的 head 沒有任何 build 證據。
-      ⚠️ 換基準會讓 build 目錄大量重建，先看「建置狀態的坑」那段。
+- [ ] **🔥 push ＋ 回覆，三件事**（本地都做完了，只差外送）：
+      1. `arith-ceildivsi-minint-fold` force-push（head `a1c2690f7d79`，拆掉 inference commit），
+         然後貼 [`patches/ceildivsi-split-reply.md`](patches/ceildivsi-split-reply.md)
+      2. `index-ceildivs-intmin` 推上 fork ＋ 開 PR，描述用
+         [`patches/index-ceildivs-intmin-pr-body.md`](patches/index-ceildivs-intmin-pr-body.md)，
+         **開完把編號填回上面那則回覆**
+      3. `vector-masked-transfer-lowering` 推新 commit（增量，不要 amend，
+         不然 banach-space 的 review 會脫節），然後貼
+         [`patches/vector-masked-transfer-review-reply.md`](patches/vector-masked-transfer-review-reply.md)
+      ⚠️ 改 PR 描述用 `gh api -X PATCH`，不要用 `gh pr edit --body-file`，並且要回讀驗證。
 
-- [ ] **#215318 本地對齊 fork** — fork 已是 `3eddbc33`，本地還在 `5b04e8cd`，
-      patch-id 相同（純 rebase）。動這條分支前先對齊。
+- [x] **#215123 rebase** — 2026-08-12 已完成，`mergeable=true`，premerge 全綠。
+
+- [x] **#215318 本地對齊 fork** — 2026-08-12 已 `reset --hard fork/...`（`3eddbc33`）。
 
 - [x] **ping #214637** — 2026-08-11 已送出（開了 4 天、零 review）。
       內容：premerge 現在全綠、仍 clean、patch 未變，並點名唯一動到的既有測試
       （`ceildivsi_overflow` → `ceildivsi_minint_dividend`）。
       [留言連結](https://github.com/llvm/llvm-project/pull/214637#issuecomment-5253490654)
 
-- [ ] **等 review** — #215123（先 rebase）、#215318。三個 PR 目前**全部零 review**。
+- [ ] **等 review** — 只剩 #215123 是真的零 review（開了 3 天）。
+      #214637、#215318 都已進 review，**球在我這邊**，見上面 push 那一項。
 
 - [ ] **等兩個 issue 的方向** — #215295（scale 語意，兩位 maintainer 對怎麼修沒共識，
       我的回覆送出後尚無新回應）、#215445（`APFloat::convert` 不回報 sign／zero 失真，含 crash，
