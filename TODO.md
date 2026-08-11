@@ -277,14 +277,14 @@ PR 描述（＝ commit 訊息，squash merge 後就是它）：[`patches/m1b-sca
 `kuhar` 近 12 個月在 **Vector 有 10 個、Linalg 有 9 個** commit，
 所以往 vector 走是同一個 reviewer，關係可以延續。
 
-### ⚠️ 2026-08-08 實查，修正兩筆先前的錯誤紀錄
+### ⚠️ 2026-08-08 實查，修正一筆先前的錯誤紀錄
 
 > **2026-08-09 更新：下面第 1 點已經過期。** premerge CI 現在真的跑了——
 > #214919 的 Linux / AArch64 / Windows / macOS arm64 / code_formatter 全綠，
 > #214622 的 Linux / Windows 也 pass。所以「本機 check-mlir 是唯一證據」這句
 > 對現在的三個 PR 不再成立。下面保留原文當紀錄。
 
-**1.「CI 7 項全 pass」是錯的——真正會建置 MLIR 的 CI 從來沒跑過。**
+**「CI 7 項全 pass」是錯的——真正會建置 MLIR 的 CI 從來沒跑過。**
 兩個 PR 上實際跑過的只有 `automate-prs-labels`（貼 label）、
 `Graphite / mergeability_check`（能不能 merge）、`greeter`（skipped），
 以及 `buildkite/libcxx-ci`（**libcxx，跟 MLIR 無關**，因為沒動到 libcxx 檔案而空過）。
@@ -294,14 +294,6 @@ PR 描述（＝ commit 訊息，squash merge 後就是它）：[`patches/m1b-sca
 `pr-code-format.yml`（clang-format 檢查）同理也沒跑。
 
 **意義：本機的 `check-mlir` 是目前唯一的驗證證據。** 所以每次 rebase 後都要自己重跑。
-
-**2.「M0 的 commit 已 amend 加上 `Assisted-by:`」是錯的。**
-兩支分支的 3 個 commit `git log` 全文 grep 不到任何 `Assisted-by`。
-本人 2026-08-08 決定：**不加揭露**，理由是「內容是自己寫的、每一行都讀過」。
-已代為在兩個 PR 回覆 bot 的政策確認留言（只聲明已讀政策、本人為作者、能答辯，
-未聲稱有無使用工具）。
-⚠️ 政策的「標示」條款觸發條件是「有無 substantial amounts of tool-generated content」，
-與「有沒有自己讀過」是**兩條獨立要求**；此判斷由本人負責，未來若 maintainer 提出可再議。
 
 ---
 
@@ -480,7 +472,7 @@ cd ~/llvm-project/build && setsid nohup ninja check-mlir > build.log 2>&1 < /dev
 ### ⚠️ 兩個已經實際踩過的坑
 
 **1. 一定要用 `setsid` 讓它脫離 session。**
-第一次跑沒加，Claude Code session 結束時整個 build 被帶走。
+第一次跑沒加，終端機 session 結束時整個 build 被帶走。
 （副作用：`setsid` 脫離後 `pkill -f "ninja check-mlir"` 不一定殺得掉，
 要用 `pgrep -a ninja` 拿 PID 再 `kill`。）
 

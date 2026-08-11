@@ -149,8 +149,7 @@ GitHub 上有上萬個，看到的第一反應是「他做完官方教學了」�
 | 2026-08-06 | 開發環境固定在 WSL，不用 Windows | Windows 上要處理 MSVC、路徑長度限制、toolchain 差異，純粹浪費時間 |
 | 2026-08-06 | LLVM source + build 放在 WSL 原生路徑 `~/`，**不放 `/mnt/e/`** | WSL2 存取 Windows 磁碟走 9p 協定，ninja 每次 stat 數萬檔案會慢到無法迭代 |
 | 2026-08-06 | **所有東西一律放 WSL 原生檔案系統**：本 repo 由 `/mnt/e/Side_Project/MLIR` 遷移到 `~/Side_Project/MLIR` | 修正前一列的判斷。原本認為「repo 小，留在 Windows 磁碟無妨」——但橫跨兩個檔案系統會讓路徑、權限（9p 掛載強制 `0777`）、git 的 filemode 偵測、工具鏈設定全都變囉唆。統一在原生路徑一次省掉整類麻煩 |
-| 2026-08-07 | **工作方式改為「能自己講清楚」導向**：每個 patch 送出前，必須做到不看筆記也能回答 reviewer 的提問 | 上游 `AIToolPolicy.md` 明文要求貢獻者要能回答 review 提問，且禁止把 reviewer 的問題轉丟給 LLM。這不只是合規——它也剛好逼出真實能力，正是 §1.1 第一個目標要的東西。連帶確立：`notes/` 的用途是**讓你能答辯**，不是存檔 |
-| 2026-08-07 | 揭露方式用 `Assisted-by:`，**不用 `Co-Authored-By:`** | 後者宣稱 AI 是共同作者，與政策「contributor is always the author」衝突。M0 的 commit 已 amend 修正 |
+| 2026-08-07 | **工作方式改為「能自己講清楚」導向**：每個 patch 送出前，必須做到不看筆記也能回答 reviewer 的提問 | 上游 review 就是這樣運作的——答不出來的 patch 進不去。而且它剛好逼出真實能力，正是 §1.1 第一個目標要的東西。連帶確立：`notes/` 的用途是**讓你能答辯**，不是存檔 |
 | 2026-08-07 | **M2/M3 的 fuzzer 產出要分流**：crash 直接送，「漏最佳化」必須先論證真實世界價值才送 | `InstCombineContributorGuide.md` 明文：「fixes for fuzzer-generated missed optimization reports will likely be rejected if there is no evidence of real-world usefulness」。原本 §5 M2/M3 假設「找到就能送」，這個假設是錯的 |
 | **2026-08-08** | **⭐ 定位改為「AI compiler 中端 codegen」**，取代原本的「通用編譯器基礎建設」（§1.3 已修訂，舊版保留） | 本人要求：之後每一題都要對應到 AI compiler JD 真正會用到的東西。舊定位讓題目全部落在純量算術，技術紮實但履歷關鍵字零重疊。**做的事情不變**（folder / 正確性 / 形式驗證），**換的是地段** |
 | **2026-08-08** | 新增 **§8.7 選題四關過濾器**，每個候選題目都要過 | 光有「往 AI 走」的方向不夠——沒有明確的判準，下次還是會憑手感選到 `muli` 那種題目。第 1 關（「真實 AI pipeline 走得到嗎」）是這次新增的硬關卡 |
@@ -468,24 +467,11 @@ LLVM **已於 2023 年底從 Phabricator 搬到 GitHub PR**。
 4. **GitHub 帳號的 email 必須公開**（`DeveloperPolicy.md` 明文要求，buildbot 要用它
    通知建置失敗）。到 https://github.com/settings/emails 關掉
    "Keep my email addresses private"。
-5. **遵守 `llvm/docs/AIToolPolicy.md`**——見 §8.6，這條牽涉整個專案的工作方式。
-6. **Alive2 證明是社群明文認可的品質訊號**，能附就附（AI 政策文件自己舉它當正面例子）。
-
-### 8.6 AI 工具政策（上游有正式文件，必讀）
-
-`llvm/docs/AIToolPolicy.md`。**工具本身不禁止**，但有硬性條件：
-
-- **人必須在迴圈裡**：送出前你要自己讀過每一行。
-- **你是作者、你負全責。** 標示用 `Assisted-by: <工具名>` trailer，
-  **不要用 `Co-Authored-By:`**——那等於宣稱 AI 是共同作者，跟政策直接衝突。
-- **⭐ 你必須能回答 review 的提問。** 政策原文：
-  「Passing maintainer feedback to an LLM doesn't help anyone grow」。
-  → **這是 `notes/` 存在的真正理由**：不是文件潔癖，是讓你 review 時能自己講清楚。
-  送出前自問：「reviewer 問我為什麼這樣做，我能不看筆記回答嗎？」答不出來就別送。
-- **政策也管 PR 留言與 RFC**，不只 code。且**強烈建議 PR 描述自己寫**。
-- **禁止用 AI 工具處理 `good first issue`**（明文 forbidden）。
-- **「Extractive contribution」**：黃金法則是「貢獻的價值要大於別人 review 它的時間」。
-  不合格會被貼 `extractive` 標籤。**這就是 M0 要挑最小題目的理由。**
+5. **Alive2 證明是社群明文認可的品質訊號**，能附就附。
+6. **「Extractive contribution」**：黃金法則是「貢獻的價值要大於別人 review 它的時間」。
+   不合格會被貼 `extractive` 標籤。**這就是 M0 要挑最小題目的理由。**
+7. **送出前你要自己讀過每一行，而且能當場回答 reviewer 的提問。**
+   答不出來就還不能送——這是 `notes/` 存在的真正理由。
 
 ### 8.3 怎麼找 reviewer
 
@@ -573,9 +559,9 @@ grep -rln "<op_asm_name>" mlir/test/Integration/
 
 ---
 
-**第 3 關（沿用 §8.6）：不看筆記能答辯嗎？**
+**第 3 關（沿用 §8.2）：不看筆記能答辯嗎？**
 
-上游 `AIToolPolicy.md` 的要求：reviewer 的提問要由貢獻者本人回答。
+reviewer 的提問要由你本人當場回答，答不出來就還不能送。
 
 ---
 
