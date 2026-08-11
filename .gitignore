@@ -1,3 +1,6 @@
 # playground 的隨手檔不進版控，templates/ 要進
 playground/scratch*.mlir
 playground/*.tmp.mlir
+
+# Claude Code 的本機設定不進版控
+.claude/
