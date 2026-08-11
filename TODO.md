@@ -16,8 +16,8 @@
 ## 一句話現況
 
 **🎉 M0 里程碑達成。第二個 commit 也進去了，而且是 LLVM core（`APFloat.cpp`）。**
-**五個 PR：2 merged、3 open，第六個待開。#214637（`kuhar`，兩輪）與 #215318（`banach-space`）
-都拿到 code review，兩邊要求的修正**本地都做完了，等 push ＋ 回覆**。**
+**六個 PR：2 merged、4 open。#214637（`kuhar`，兩輪）與 #215318（`banach-space`）
+都拿到 code review，修正與回覆**全部送出，球回到 reviewer 那邊**。**
 
 | PR | 內容 | 狀態（2026-08-12 實查） | CI |
 |---|---|---|---|
@@ -439,12 +439,14 @@ PR 描述（＝ commit 訊息，squash merge 後就是它）：[`patches/m1b-sca
       ✅ 這次 `gh pr create --body-file` 沒有踩到 projects-classic 那個坑
       （只有 `gh pr edit --body-file` 會），描述 2630 字元完整寫入，已回讀確認。
 
-- [ ] **🔥 貼兩則回覆**（唯一還沒做的外送動作）：
-      1. #214637 貼 [`patches/ceildivsi-split-reply.md`](patches/ceildivsi-split-reply.md)
-         （已填入 #215696）
-      2. #215318 貼 [`patches/vector-masked-transfer-review-reply.md`](patches/vector-masked-transfer-review-reply.md)
-         ——兩則 inline 回在 `banach-space` 原本的 comment 底下，一則 top-level 回
-         "Will there be follow-ups?"
+- [x] **回覆全部送出** — 2026-08-12（UTC 08-11 23:17）：
+      #214637 一則 top-level（[5259965488](https://github.com/llvm/llvm-project/pull/214637#issuecomment-5259965488)）；
+      #215318 兩則 inline（[r3762420018](https://github.com/llvm/llvm-project/pull/215318#discussion_r3762420018)、
+      [r3762420126](https://github.com/llvm/llvm-project/pull/215318#discussion_r3762420126)）
+      ＋ 一則 top-level（[5259966583](https://github.com/llvm/llvm-project/pull/215318#issuecomment-5259966583)）。
+      已回讀確認 `in_reply_to_id` 對上原 comment。
+      💡 inline 回覆要用 `gh api repos/.../pulls/<n>/comments/<comment_id>/replies`，
+      才會 threaded 在原留言底下；貼到 `issues/<n>/comments` 只會變成獨立的 top-level。
 
 - [x] **#215123 rebase** — 2026-08-12 已完成，`mergeable=true`，premerge 全綠。
 
