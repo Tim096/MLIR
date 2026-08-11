@@ -26,7 +26,7 @@
 | [#214637](https://github.com/llvm/llvm-project/pull/214637) | M1-a：`ceildivsi` MININT 折疊 | `kuhar` **兩輪** review。第二輪要求拆走 `inferCeilDivS`，**已照辦**：本地 head `a1c2690f7d79`，3 個 commit，**尚未 push** | 待重跑 |
 | [#215123](https://github.com/llvm/llvm-project/pull/215123) | M1-b：`scaling_extf`/`scaling_truncf` 常數折疊 | 衝突已解（rebase，head `6319069bfd7b`），`mergeable=true`。描述已同步。零 review | **全綠**（Linux / Windows / AArch64 / code_formatter / LLVM_ABI） |
 | [#215318](https://github.com/llvm/llvm-project/pull/215318) | M1-d：transfer permutation lowering 支援 masked op | **`banach-space` 2026-08-11 18:27 review 了**（三點）。本地已全部處理，**尚未 push** | 全綠（舊 head `3eddbc33`） |
-| （未開） | 從 #214637 拆出：`index`／inference 的 `ceildivs` INT_MIN 一致性 | 分支 `index-ceildivs-intmin`，3 個 commit，本地驗證完畢 | — |
+| [#215696](https://github.com/llvm/llvm-project/pull/215696) | 從 #214637 拆出：`index`／inference 的 `ceildivs` INT_MIN 一致性 | **2026-08-12 開出**，head `b98eff9e3d64`，3 個 commit，`mergeable=true` | 待跑 |
 
 ### ✅ 2026-08-12：#215123 的衝突已解
 
@@ -433,16 +433,18 @@ PR 描述（＝ commit 訊息，squash merge 後就是它）：[`patches/m1b-sca
 
 ## 進行中
 
-- [ ] **🔥 push ＋ 回覆，三件事**（本地都做完了，只差外送）：
-      1. `arith-ceildivsi-minint-fold` force-push（head `a1c2690f7d79`，拆掉 inference commit），
-         然後貼 [`patches/ceildivsi-split-reply.md`](patches/ceildivsi-split-reply.md)
-      2. `index-ceildivs-intmin` 推上 fork ＋ 開 PR，描述用
-         [`patches/index-ceildivs-intmin-pr-body.md`](patches/index-ceildivs-intmin-pr-body.md)，
-         **開完把編號填回上面那則回覆**
-      3. `vector-masked-transfer-lowering` 推新 commit（增量，不要 amend，
-         不然 banach-space 的 review 會脫節），然後貼
-         [`patches/vector-masked-transfer-review-reply.md`](patches/vector-masked-transfer-review-reply.md)
-      ⚠️ 改 PR 描述用 `gh api -X PATCH`，不要用 `gh pr edit --body-file`，並且要回讀驗證。
+- [x] **push，三條** — 2026-08-12 全部完成，head 都回讀驗證過：
+      #214637 `a1c2690f7d79`（force-push）、#215318 `d0170cd77b5c`（增量）、
+      #215696 `b98eff9e3d64`（新開）。
+      ✅ 這次 `gh pr create --body-file` 沒有踩到 projects-classic 那個坑
+      （只有 `gh pr edit --body-file` 會），描述 2630 字元完整寫入，已回讀確認。
+
+- [ ] **🔥 貼兩則回覆**（唯一還沒做的外送動作）：
+      1. #214637 貼 [`patches/ceildivsi-split-reply.md`](patches/ceildivsi-split-reply.md)
+         （已填入 #215696）
+      2. #215318 貼 [`patches/vector-masked-transfer-review-reply.md`](patches/vector-masked-transfer-review-reply.md)
+         ——兩則 inline 回在 `banach-space` 原本的 comment 底下，一則 top-level 回
+         "Will there be follow-ups?"
 
 - [x] **#215123 rebase** — 2026-08-12 已完成，`mergeable=true`，premerge 全綠。
 
