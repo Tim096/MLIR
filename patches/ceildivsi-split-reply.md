@@ -1,7 +1,7 @@
 # Reply draft — #214637, answering kuhar's second review
 
-Post as a normal PR comment (not an inline reply), after force-pushing the
-branch and opening the split-out PR. Replace `#NNNNN` with the new PR number.
+Post as a normal PR comment (not an inline reply). The branch has been
+force-pushed (head `a1c2690f7d79`) and the split-out PR is #215696.
 
 ---
 
@@ -15,6 +15,6 @@ never returns the wrapped value, because `foldBinaryOpChecked` requires the
 they do not, so it does not fold at all on main. The lowering has no such
 check.
 
-#NNNNN fixes those two first and drops the `inferCeilDivS` workarounds on top,
+#215696 fixes those two first and drops the `inferCeilDivS` workarounds on top,
 so nothing in tree is inconsistent between its commits. It has the 32-bit
 regression in `int-range-inference.mlir` you asked for.
