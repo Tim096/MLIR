@@ -9,39 +9,91 @@
 >
 > 新 session 開場建議直接說：「讀 Goal.md 和 TODO.md，然後接續」。
 
-最後更新：2026-08-10
+最後更新：2026-08-12
 
 ---
 
 ## 一句話現況
 
 **🎉 M0 里程碑達成。第二個 commit 也進去了，而且是 LLVM core（`APFloat.cpp`）。**
-**四個 PR：2 merged、2 open。兩個 issue：#215295 已有兩位 maintainer 回應、#215445 新開。**
+**五個 PR：2 merged、3 open。#214637 拿到第一份真正的 code review（`kuhar`），已回應並推修正。**
 
-| PR | 內容 | 狀態（2026-08-11 實查） | CI |
+| PR | 內容 | 狀態（2026-08-12 實查） | CI |
 |---|---|---|---|
 | [#214622](https://github.com/llvm/llvm-project/pull/214622) | M0：`AtomicRMWKind` switch 窮盡（NFC） | ✅ **已 MERGE**（2026-08-09 15:03，merge commit `78e17e70bd52`） | — |
 | [#214919](https://github.com/llvm/llvm-project/pull/214919) | M1-b0：`f8E8M0FNU` NaN 被折成 Inf | ✅ **已 MERGE**（2026-08-10 11:09 UTC，merge commit `794aa0fd923a`） | 全綠 |
-| [#214637](https://github.com/llvm/llvm-project/pull/214637) | M1-a：`ceildivsi` MININT 折疊 | open **4 天**，零 review。requested reviewer = `kuhar`。**2026-08-11 已 ping** | 全綠（Linux / Windows / AArch64 / code_formatter / LLVM_ABI） |
-| [#215123](https://github.com/llvm/llvm-project/pull/215123) | M1-b：`scaling_extf`/`scaling_truncf` 常數折疊 | open 2 天，零 review。⚠️ **`dirty`＝有衝突，要 rebase** | ⚠️ **build job 沒跑**（衝突連帶） |
-| [#215318](https://github.com/llvm/llvm-project/pull/215318) | M1-d：transfer permutation lowering 支援 masked op | open 1 天，零 review | 全綠（Linux / Windows / AArch64 / code_formatter / LLVM_ABI） |
+| [#214637](https://github.com/llvm/llvm-project/pull/214637) | M1-a：`ceildivsi` MININT 折疊 | **`kuhar` 2026-08-11 15:06 review 了**，兩點都已處理並推上（head `c67814fef49a`，4 個 commit）。已回覆 | 重跑中 |
+| [#215123](https://github.com/llvm/llvm-project/pull/215123) | M1-b：`scaling_extf`/`scaling_truncf` 常數折疊 | 衝突已解（rebase，head `6319069bfd7b`），`mergeable=true`。描述已同步。零 review | **全綠**（Linux / Windows / AArch64 / code_formatter / LLVM_ABI） |
+| [#215318](https://github.com/llvm/llvm-project/pull/215318) | M1-d：transfer permutation lowering 支援 masked op | open 2 天，零 review | 全綠（Linux / Windows / AArch64 / code_formatter / LLVM_ABI） |
 
-### ⚠️ 2026-08-11 實查：#215123 有衝突，而且 CI 記錄已過期
+### ✅ 2026-08-12：#215123 的衝突已解
 
-`mergeable_state = dirty`。**衝突只在 `mlir/test/Dialect/Arith/canonicalize.mlir`**：
-#214919（`794aa0fd923a`，08-10 合併）在同一個檔案加了 E8M0 NaN 的測試，
-#215123 也在那裡加測試，兩邊撞在一起。
+rebase 到 `a558267da71f`，衝突（`canonicalize.mlir` 撞 #214919 的 E8M0 測試）解掉，
+`dirty` → `mergeable=true`，premerge 全綠。**patch 內容一個字沒動**——那三個檔案
+上游自 merge-base 起零改動，只有行號位移（`git show | grep -v '^index '` 前後 diff 為空）。
+舊 commit 留在 `backup/scaling-fold-prerebase-0812`。
 
-其餘兩個檔案安全——上游自 2026-08-09 起 `ArithOps.td` 零改動，
-`ArithOps.cpp` 只有本人自己的 #214622（08-09 15:03，**早於** PR head `f9a6792b` 的
-08-09 17:38），所以程式碼本體沒有競爭。
+**順便補上兩件事**：
 
-⚠️ **衝突會連帶讓 premerge 不跑**——GitHub 算不出 merge commit，build job 就不啟動。
-現在 `f9a6792b` 上只有 `mergeability_check` / `automate-prs-labels` / `greeter` 三項，
-**沒有任何 build**。TODO 先前記的「#215123 全綠」是**更早的 head**，已過期。
+1. **PR 描述之前只改了一半**。08-10 晚間那次只更新了 NaN 那段，
+   「`scale = 1.6 : f16` 兩邊算出 2.0 vs 1.0」那段還是舊的——而那句正是
+   `tgymnich` 在 #215295 指出不成立的（1.6→2.0 發生在建 attribute 時，不是 fold）。
+   現在整份描述＝commit message，已同步。
+2. **重跑 exhaustive sweep**（`tools/verify-scaling-fold/verify.py`），因為原本那張表是在
+   #214919 合併**之前**量的。數字完全一致（4096/656、4096/4096、16777216/33390，零不一致），
+   而且 `NaN-scale diffs vs expansion` 現在是 **0**——這就是 NaN 那段理由該換掉的實證。
+   truncf 那輪 1677 萬筆跑 2009 秒。
 
-**新資訊**：`kuhar` 在 2026-08-09 23:44:07 加了 reviewer，**13 秒後（23:44:13）自己移除**。
-不知道原因，但代表他看到了這個 PR。
+⚠️ **`gh pr edit --body-file` 會被 GitHub 的 projects-classic 棄用錯誤擋掉**（看起來沒報錯但沒寫進去）。
+改用 `gh api -X PATCH repos/llvm/llvm-project/pulls/<n> --input <json>` 才會生效。**改完一定要回讀驗證。**
+
+### 🔥 2026-08-12：#214637 的 review 與由此挖到的東西
+
+`kuhar` 留了兩則 inline comment：
+
+1. **`inferCeilDivS` 也要一起改**（`mlir/lib/Interfaces/Utils/InferIntRangeCommon.cpp`）。
+   他給的例子：`ceildivsi(INT64_MIN, 1189465982)` 在 `-test-single-fold` 得 `-7754212542`，
+   在 `-int-range-optimizations` 得 `7754212542`。
+2. **加一個 vector 測試**，釘住 folder 裡 `overflowOrDiv0` 是整個 vector 共用的。
+
+**挖到的**：這個矛盾**不是本 PR 造成的，在 upstream main 上已經成立**。用只多了不相干
+scaling fold 的 binary（＝main 的 `ceildivsi` 行為）實測：
+
+```
+$ mlir-opt cd1.mlir -arith-expand -canonicalize   →  -7754212542
+$ mlir-opt cd2.mlir -int-range-optimizations      →  斷言 == +7754212542（且 != -7754212542）
+```
+
+來由：#116284（2024-11）加 sign flip 是為了配合當時的 expansion `-(-a/b)`（`-MININT` 是 noop，
+所以結果變正）；#121062 再加一層 range union 去補那個不連續。但 **#133774（2025-04-02）
+已把 expansion 換成數學上的 ceiling**，兩層 workaround 從那時起就對不上任何實作了。
+
+**改法**：兩層全刪，`inferCeilDivS` 變成跟 `inferFloorDivS` 完全對稱。可以刪 union 的理由：
+`inferDivSRange` 只在 range 端點取值，而 ceildivsi 在除數不變號時對兩個運算元都單調
+（`inferDivSRange` 本來就會在除數可能變號時放棄），所以端點就能界住。#121062 的回歸測試
+`@ceil_divsi_full_range` 不靠 union 也照樣不折——已驗證。
+
+改完三者一致：`-test-single-fold`、`-arith-expand -canonicalize` 都給 `-7754212542`，
+`-int-range-optimizations` 斷言 `== -7754212542`。`check-mlir` 3848 passed / 0 failed。
+
+**四個 commit 的分工**（LLVM 是 squash merge，但分開讓 kuhar 好讀）：
+
+| commit | 內容 |
+|---|---|
+| `60759dbd7cde` | 先補 MININT divisor 的測試（現況行為） |
+| `2823ce06986d` | folder 本體 |
+| `a2053d64062c` | 刪掉 `inferCeilDivS` 兩層 workaround ＋ int-range 測試 |
+| `c67814fef49a` | vector 共用 flag 的回歸測試 |
+
+回覆裡有提「這條可以拆成獨立 PR」，等他表態。
+
+⚠️ **寫給上游的東西不要用 `miscompile` 這類升級用語**（2026-08-12 他明確要求）。
+「兩個 pass 對同一個 op 給出矛盾答案，而且早於你指出的改動」就夠了——並排放兩個輸出、
+說清從哪個 commit／日期開始，比形容詞有用。
+
+⚠️ **`InferIntRangeCommon.cpp` 在 `MLIRInterfaceUtils` 裡，動它要重編 ~1500 個 target**（約 25 分鐘），
+不是只編幾個檔案。另外 sweep 跑的時候**不能 rebuild**——`bin/mlir-opt` 會被換掉，
+sweep 每次都是重新 spawn，結果會被污染。
 
 ### ⚠️ 2026-08-11 實查：#215318 本地與 fork 不同步
 

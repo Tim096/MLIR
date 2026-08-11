@@ -23,14 +23,16 @@ on `scaling_truncf` never changes a folded result. Poison propagates and
 shaped results are guarded with a static-shape check, as in the generic
 folders.
 
-Scales that are not already `f8E8M0FNU` are left alone: `-arith-expand`
-truncates wider scales to `f8E8M0FNU` first while `ArithToAMDGPU` reads their
-exponent field, and for `scale = 1.6 : f16` the two disagree (2.0 vs 1.0).
+Scales that are not already `f8E8M0FNU` are left alone, because what such a
+scale means is unsettled: the tree does not say whether truncating a wider
+scale to `f8E8M0FNU` rounds or takes its exponent, and `ArithToAMDGPU` passes
+it to an instruction that reads only the exponent. #215295 asks for a ruling.
 
-A NaN scale is built directly rather than by widening it, which for
-`f8E8M0FNU` yields a value encoded as an infinity: that format has no
-significand bits to hold the quiet bit. It stays unfolded when the result type
-is finite-only, such as `f4E2M1FN`, which cannot represent a NaN at all.
+A NaN scale is built directly rather than by widening it, so that the fold
+still succeeds when widening `in` is lossy -- which a NaN scale makes
+irrelevant, since it forces a NaN result whatever `in` is. It stays unfolded
+when the result type is finite-only, such as `f4E2M1FN`, which cannot
+represent a NaN at all.
 
 The input space of these types is small enough to enumerate, so every
 combination was checked against `-arith-expand -canonicalize`, against the OCP
