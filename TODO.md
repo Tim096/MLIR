@@ -16,14 +16,14 @@
 ## 一句話現況
 
 **🎉 M0 里程碑達成。第二個 commit 也進去了，而且是 LLVM core（`APFloat.cpp`）。**
-**六個 PR：2 merged、4 open。#214637（`kuhar`，兩輪）與 #215318（`banach-space`）
-都拿到 code review，修正與回覆**全部送出，球回到 reviewer 那邊**。**
+**六個 PR：2 merged、4 open，其中 #214637 已 APPROVED，等找人代 merge。**
+**#215318（`banach-space`）三點都答完，球在 reviewer 那邊。**
 
 | PR | 內容 | 狀態（2026-08-12 實查） | CI |
 |---|---|---|---|
 | [#214622](https://github.com/llvm/llvm-project/pull/214622) | M0：`AtomicRMWKind` switch 窮盡（NFC） | ✅ **已 MERGE**（2026-08-09 15:03，merge commit `78e17e70bd52`） | — |
 | [#214919](https://github.com/llvm/llvm-project/pull/214919) | M1-b0：`f8E8M0FNU` NaN 被折成 Inf | ✅ **已 MERGE**（2026-08-10 11:09 UTC，merge commit `794aa0fd923a`） | 全綠 |
-| [#214637](https://github.com/llvm/llvm-project/pull/214637) | M1-a：`ceildivsi` MININT 折疊 | `kuhar` **兩輪** review。第二輪要求拆走 `inferCeilDivS`，**已照辦**：本地 head `a1c2690f7d79`，3 個 commit，**尚未 push** | 待重跑 |
+| [#214637](https://github.com/llvm/llvm-project/pull/214637) | M1-a：`ceildivsi` MININT 折疊 | ✅ **`kuhar` APPROVED**（2026-08-12，共三輪 review）。最後一個 nit 已改，head `a92dedfc02bd` | 待重跑 |
 | [#215123](https://github.com/llvm/llvm-project/pull/215123) | M1-b：`scaling_extf`/`scaling_truncf` 常數折疊 | 衝突已解（rebase，head `6319069bfd7b`），`mergeable=true`。描述已同步。零 review | **全綠**（Linux / Windows / AArch64 / code_formatter / LLVM_ABI） |
 | [#215318](https://github.com/llvm/llvm-project/pull/215318) | M1-d：transfer permutation lowering 支援 masked op | **`banach-space` 2026-08-11 18:27 review 了**（三點）。本地已全部處理，**尚未 push** | 全綠（舊 head `3eddbc33`） |
 | [#215696](https://github.com/llvm/llvm-project/pull/215696) | 從 #214637 拆出：`index`／inference 的 `ceildivs` INT_MIN 一致性 | **2026-08-12 開出**，head `b98eff9e3d64`，3 個 commit，`mergeable=true` | 待跑 |
@@ -96,6 +96,46 @@ $ mlir-opt cd2.mlir -int-range-optimizations      →  斷言 == +7754212542（�
 ⚠️ **`InferIntRangeCommon.cpp` 在 `MLIRInterfaceUtils` 裡，動它要重編 ~1500 個 target**（約 25 分鐘），
 不是只編幾個檔案。另外 sweep 跑的時候**不能 rebuild**——`bin/mlir-opt` 會被換掉，
 sweep 每次都是重新 spawn，結果會被污染。
+
+### ✅ 2026-08-12：#214637 **kuhar APPROVED**（"LGTM % one comment"）
+
+拆分那則回覆送出後 67 分鐘（UTC 00:24），`kuhar` 批准了，只留一個 nit
+（`ArithOps.cpp:1001`）：
+
+```cpp
+// 他要的
+if (a.isNegative() != b.isNegative() || a.srem(b).isZero())
+```
+
+**理由**：`a.srem(b)` 是第二次有號除法（`sdiv` 已經算過一次），而異號的組合
+本來就直接回 quotient、不需要餘數。`||` 短路，所以 disjunct 的順序就是成本順序，
+換一下大約一半的輸入省掉那次除法。
+
+**#215696 的 index 版本本來就是這個順序**，所以這一改是把兩邊對齊。
+這條原則已記進長期記憶（`short-circuit-order-is-cost-order`）：
+寫 fold 的條件式要先問每個 disjunct「多貴、多常中」，便宜且常中的放左邊；
+同一份邏輯若跨 dialect 重複，順序也要一起對齊。
+
+改動併回 folder 那個 commit（不另開一個修自己的 commit），
+新 head `a92dedfc02bd`，相對舊 head 只差那一行。`check-mlir` 3848 passed / 0 failed。
+已 force-push ＋ [inline 回覆](https://github.com/llvm/llvm-project/pull/214637#discussion_r3763597542)。
+**force-push 沒有讓 APPROVED 消失**（LLVM 沒設 dismiss stale reviews），已回讀確認。
+
+### ⚠️ 2026-08-12 發現：兩批貢獻的 git 署名不一致
+
+| 已 merge 的兩個 commit | 目前三條分支上的 commit |
+|---|---|
+| `曾鈜寬 Tseng Hung Kuan <P76091014@gs.ncku.edu.tw>` | `Hung-Kuan Tseng <tseng.tim096@gmail.com>` |
+
+（`78e17e70bd52` / `794aa0fd923a` 對上 #214637、#215318、#215696 的所有 commit。）
+
+LLVM 是 squash merge，**author 取自 PR 上的 commit**，所以照現況合下去，
+upstream 的 `git log` 會出現兩個看起來不同的人。對履歷來說貢獻會被拆成兩份。
+
+**要決定**：統一到哪一個。若要改，三條分支都得 rebase 改 author 再 force-push
+（`git rebase --exec 'git commit --amend --no-edit --reset-author'`，
+搭配 `git -c user.name=... -c user.email=...`），而且 #214637 已經 APPROVED，
+動它要重新確認 approve 還在。**改之前先問過本人。**
 
 ### 🔥 2026-08-12 晚：kuhar 第二輪 review → `inferCeilDivS` 拆成獨立 PR
 
@@ -438,6 +478,10 @@ PR 描述（＝ commit 訊息，squash merge 後就是它）：[`patches/m1b-sca
       #215696 `b98eff9e3d64`（新開）。
       ✅ 這次 `gh pr create --body-file` 沒有踩到 projects-classic 那個坑
       （只有 `gh pr edit --body-file` 會），描述 2630 字元完整寫入，已回讀確認。
+
+- [ ] **🔥 #214637 已 APPROVED，要請人代 merge** — 等 premerge 綠了再開口
+      （沒有 commit access）。**開口前先解決上面那則署名不一致**，
+      因為代 merge 的人會問要用哪個 name/email。
 
 - [x] **回覆全部送出** — 2026-08-12（UTC 08-11 23:17）：
       #214637 一則 top-level（[5259965488](https://github.com/llvm/llvm-project/pull/214637#issuecomment-5259965488)）；
