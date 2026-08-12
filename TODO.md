@@ -17,7 +17,7 @@
 
 **🎉 M0 里程碑達成。第三個 commit 進去了，`arith` 的 `ceildivsi` MININT 折疊。**
 **六個 PR：3 merged、3 open。**
-**#215696（`kuhar`）三點都改完、已 push；#215318（`banach-space`）球在 reviewer 那邊。**
+**#215696（`kuhar`）三點都改完、回覆已送出；#215318（`banach-space`）也在等 reviewer。**
 
 | PR | 內容 | 狀態（2026-08-12 實查） | CI |
 |---|---|---|---|
@@ -26,13 +26,13 @@
 | [#214637](https://github.com/llvm/llvm-project/pull/214637) | M1-a：`ceildivsi` MININT 折疊 | ✅ **已 MERGE**（2026-08-12 13:39 UTC，`kuhar` 代 merge，squash commit `2a0c335d4538`） | 全綠 |
 | [#215123](https://github.com/llvm/llvm-project/pull/215123) | M1-b：`scaling_extf`/`scaling_truncf` 常數折疊 | 衝突已解（rebase，head `6319069bfd7b`），`mergeable=true`。描述已同步。**零 review，開了 3 天** | **全綠**（Linux / Windows / AArch64 / code_formatter / LLVM_ABI） |
 | [#215318](https://github.com/llvm/llvm-project/pull/215318) | M1-d：transfer permutation lowering 支援 masked op | `banach-space` 2026-08-11 18:27 review 三點，已全部回覆並 push（head `d0170cd77b5c`）。**球在 reviewer 那邊** | 全綠 |
-| [#215696](https://github.com/llvm/llvm-project/pull/215696) | 從 #214637 拆出：`index`／inference 的 `ceildivs` INT_MIN 一致性 | **`kuhar` 2026-08-12 13:35 review 三點**（inline，COMMENTED）。三點都改完，amend 進第一個 commit 後 force-push，head `21ffbbcf9bc2`。**回覆草稿寫好但尚未送出** | 待跑 |
+| [#215696](https://github.com/llvm/llvm-project/pull/215696) | 從 #214637 拆出：`index`／inference 的 `ceildivs` INT_MIN 一致性 | **`kuhar` 2026-08-12 13:35 review 三點**（inline，COMMENTED）。三點都改完，amend 進第一個 commit 後 force-push，head `7a0d9f0ea804`，`mergeable=true`。**回覆已送出，球在 reviewer 那邊** | 待跑 |
 
 ### 🔥 2026-08-12：#214637 merge，同一分鐘 #215696 收到 review
 
 `kuhar` 13:35 UTC 在 #215696 留三個 inline comment，13:39 UTC 把 #214637 merge 掉。
 三點都已處理，amend 進第一個 commit（stack 維持三個 commit），
-新 head `21ffbbcf9bc2`，`ninja check-mlir` 3848 passed / 0 failed，
+新 head `7a0d9f0ea804`，`ninja check-mlir` 3848 passed / 0 failed，
 `git clang-format` clean。舊 stack 留在 `backup/index-ceildivs-prereview-0812`。
 
 **(a) `IndexOps.cpp` 改用 `APIntOps::RoundingSDiv(n, m, Rounding::UP)`**
@@ -533,10 +533,14 @@ PR 描述（＝ commit 訊息，squash merge 後就是它）：[`patches/m1b-sca
       squash commit `2a0c335d4538`。第三個進上游的 commit。
       留言裡附 `Hung-Kuan Tseng <tseng.tim096@gmail.com>` 說明作者身分那招有效。
 
-- [ ] **🔥 #215696 的回覆還沒送出** — 三點都已改完並 force-push（head `21ffbbcf9bc2`），
-      草稿在 `patches/index-ceildivs-intmin-review-reply.md`，三個 comment id：
-      `3766876868`（`IndexOps.cpp`）、`3766876874`（canonicalize 測試）、
-      `3766876880`（index-to-llvm 測試）。**送出前先確認 (a) 那個刻意偏離要不要保留。**
+- [x] **#215696 三點已改完並回覆** — 2026-08-12 force-push（head `7a0d9f0ea804`），
+      三則 inline（[r3767492306](https://github.com/llvm/llvm-project/pull/215696#discussion_r3767492306)、
+      [r3767492472](https://github.com/llvm/llvm-project/pull/215696#discussion_r3767492472)、
+      [r3767492664](https://github.com/llvm/llvm-project/pull/215696#discussion_r3767492664)）
+      ＋ 一則 top-level（[5268408619](https://github.com/llvm/llvm-project/pull/215696#issuecomment-5268408619)）。
+      已回讀確認 `in_reply_to_id` 對上原 comment。**球在 kuhar 那邊。**
+      💡 這台機器沒有 `jq`，要組 JSON body 用 `python3 -c` 寫檔再 `gh api --input`；
+      `gh --jq` 是內建的，可以用。
 
 - [x] **#215696 同步兩項優化** — 先判符號本來就是對的，乘法取代 srem 已補上。
       兩個 dialect 的 ceildivs 現在算法完全一樣。

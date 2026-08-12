@@ -24,11 +24,11 @@ my `sadd_ov` on the correction is fine for the reason `RoundingSDiv` leaves its
 own `Quo + 1` unguarded: a quotient of `INT_MAX` needs `m == +/-1`, and both of
 those divide exactly, so the correction never fires on one.
 
-One deviation from what you wrote. I spelled the rejection as the bit test
-`sdiv_ov` itself performs rather than calling `sdiv_ov` and discarding the
-quotient, because `RoundingSDiv` runs `sdivrem` internally and I did not want
-the fold to divide twice. Say the word if you would rather the guard name the
-helper it came from.
+One deviation from what you wrote, now called out in the commit message: I
+spelled the rejection as the bit test `sdiv_ov` itself performs rather than
+calling `sdiv_ov` and discarding the quotient, since `RoundingSDiv` already
+divides internally and the fold has no reason to divide twice. Say the word if
+you would rather the guard name the helper it came from.
 
 ## (b) `index-canonicalize.mlir` — negative/negative inexact case
 
@@ -64,7 +64,7 @@ are still what covers that.
 ## Top-level comment (post after the three replies)
 
 All three addressed, amended into the first commit; the stack is still three
-commits and the new head is `21ffbbcf9bc2`.
+commits and the new head is `7a0d9f0ea804`.
 
 Re-ran the oracle sweep on the folder after the switch to `RoundingSDiv`, over
 7140 operand pairs (every pair from -40..40 plus `INT_MAX`, `INT_MIN`,
