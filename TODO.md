@@ -15,18 +15,62 @@
 
 ## 一句話現況
 
-**🎉 M0 里程碑達成。第二個 commit 也進去了，而且是 LLVM core（`APFloat.cpp`）。**
-**六個 PR：2 merged、4 open，其中 #214637 已 APPROVED，等找人代 merge。**
-**#215318（`banach-space`）三點都答完，球在 reviewer 那邊。**
+**🎉 M0 里程碑達成。第三個 commit 進去了，`arith` 的 `ceildivsi` MININT 折疊。**
+**六個 PR：3 merged、3 open。**
+**#215696（`kuhar`）三點都改完、已 push；#215318（`banach-space`）球在 reviewer 那邊。**
 
 | PR | 內容 | 狀態（2026-08-12 實查） | CI |
 |---|---|---|---|
 | [#214622](https://github.com/llvm/llvm-project/pull/214622) | M0：`AtomicRMWKind` switch 窮盡（NFC） | ✅ **已 MERGE**（2026-08-09 15:03，merge commit `78e17e70bd52`） | — |
 | [#214919](https://github.com/llvm/llvm-project/pull/214919) | M1-b0：`f8E8M0FNU` NaN 被折成 Inf | ✅ **已 MERGE**（2026-08-10 11:09 UTC，merge commit `794aa0fd923a`） | 全綠 |
-| [#214637](https://github.com/llvm/llvm-project/pull/214637) | M1-a：`ceildivsi` MININT 折疊 | ✅ **`kuhar` APPROVED**（2026-08-12，共三輪 review）。最後一個 nit 已改，head `a92dedfc02bd` | 待重跑 |
-| [#215123](https://github.com/llvm/llvm-project/pull/215123) | M1-b：`scaling_extf`/`scaling_truncf` 常數折疊 | 衝突已解（rebase，head `6319069bfd7b`），`mergeable=true`。描述已同步。零 review | **全綠**（Linux / Windows / AArch64 / code_formatter / LLVM_ABI） |
-| [#215318](https://github.com/llvm/llvm-project/pull/215318) | M1-d：transfer permutation lowering 支援 masked op | **`banach-space` 2026-08-11 18:27 review 了**（三點）。本地已全部處理，**尚未 push** | 全綠（舊 head `3eddbc33`） |
-| [#215696](https://github.com/llvm/llvm-project/pull/215696) | 從 #214637 拆出：`index`／inference 的 `ceildivs` INT_MIN 一致性 | **2026-08-12 開出**，3 個 commit，零 review。已同步 kuhar 的兩項優化，head `489cb898c5cb` | 待跑 |
+| [#214637](https://github.com/llvm/llvm-project/pull/214637) | M1-a：`ceildivsi` MININT 折疊 | ✅ **已 MERGE**（2026-08-12 13:39 UTC，`kuhar` 代 merge，squash commit `2a0c335d4538`） | 全綠 |
+| [#215123](https://github.com/llvm/llvm-project/pull/215123) | M1-b：`scaling_extf`/`scaling_truncf` 常數折疊 | 衝突已解（rebase，head `6319069bfd7b`），`mergeable=true`。描述已同步。**零 review，開了 3 天** | **全綠**（Linux / Windows / AArch64 / code_formatter / LLVM_ABI） |
+| [#215318](https://github.com/llvm/llvm-project/pull/215318) | M1-d：transfer permutation lowering 支援 masked op | `banach-space` 2026-08-11 18:27 review 三點，已全部回覆並 push（head `d0170cd77b5c`）。**球在 reviewer 那邊** | 全綠 |
+| [#215696](https://github.com/llvm/llvm-project/pull/215696) | 從 #214637 拆出：`index`／inference 的 `ceildivs` INT_MIN 一致性 | **`kuhar` 2026-08-12 13:35 review 三點**（inline，COMMENTED）。三點都改完，amend 進第一個 commit 後 force-push，head `21ffbbcf9bc2`。**回覆草稿寫好但尚未送出** | 待跑 |
+
+### 🔥 2026-08-12：#214637 merge，同一分鐘 #215696 收到 review
+
+`kuhar` 13:35 UTC 在 #215696 留三個 inline comment，13:39 UTC 把 #214637 merge 掉。
+三點都已處理，amend 進第一個 commit（stack 維持三個 commit），
+新 head `21ffbbcf9bc2`，`ninja check-mlir` 3848 passed / 0 failed，
+`git clang-format` clean。舊 stack 留在 `backup/index-ceildivs-prereview-0812`。
+
+**(a) `IndexOps.cpp` 改用 `APIntOps::RoundingSDiv(n, m, Rounding::UP)`**
+
+他要我別自己再維護一份餘數／符號修正。看 `llvm/lib/Support/APInt.cpp:2816`，
+`RoundingSDiv` 是 `sdivrem` 後判 `Rem.isNegative() != B.isNegative()`；
+`sdivrem` 的餘數符號跟被除數相同，所以那就是同號條件的另一種寫法，完全等價。
+順便可以拿掉我原本在 `+1` 上的 `sadd_ov`——`RoundingSDiv` 自己的 `Quo + 1` 也沒防護，
+理由是商等於 `INT_MAX` 需要 `m == ±1`，而那兩個都整除，修正根本不會觸發。
+
+**一個刻意的偏離**：他寫「放在既有的 `sdiv_ov` guard 後面」，我改成直接寫
+`n.isMinSignedValue() && m.isAllOnes()`——那就是 `sdiv_ov` 內部算的東西。
+因為 `RoundingSDiv` 裡面已經有一次 `sdivrem`，照字面寫等於除兩次。
+回覆裡有寫明這點並說「你要的話我改回去」。
+
+**(b) `index-canonicalize.mlir` 補負/負不整除**：`@ceildivs_neg` 加第二個結果，
+`ceildivs(-5, -2)` → `3`。原本 same-sign 修正只有正/正走得到。
+
+**(c) `index-to-llvm.mlir` 補值的迴歸**：加在既有的 `INDEX32`／`INDEX64` run 底下，
+不用新開 RUN line——光是 conversion 就已經吐出 `llvm.mlir.constant(-306783378)`。
+
+> 💡 **這裡有個一定要知道的機制**：`ConversionConfig::foldingMode` 預設是
+> `BeforePatterns`，`OperationLegalizer` 會**先試 fold 再找 pattern**
+> （`mlir/lib/Transforms/Utils/DialectConversion.cpp:2601`）。
+> 所以常數運算元的 `index.ceildivs` 根本不會走到 `ConvertIndexCeilDivS`，
+> 那個常數是 folder 算出來的。
+> 這個 check 在 main 上仍然會 fail（那邊 fold 失敗 → pattern 真的跑 → 而
+> `llvm.sdiv`／`add`／`mul`／`select` 都沒有 folder，不會再被折起來），
+> 所以確實是他要的迴歸；但它 pin 的是「fold 和 lowering 對這個輸入是否一致」，
+> **不是 pin 產生的 op 序列**。上面那段序列 CHECK 才是管 lowering 的。
+> 測試註解和回覆都照這個講法寫，不要讓它讀起來像 lowering 測試。
+
+**額外自查**：7140 組運算元（-40..40 全配對 ＋ `INT_MAX`／`INT_MIN`／
+`±1000000007`，排除除以零）對照 LLVM 外部算的精確 ceiling，零不一致，
+唯一折不掉的是 `(-2147483648, -1)`。
+
+回覆草稿（三則 inline ＋ 一則 top-level，含 comment id）在
+`patches/index-ceildivs-intmin-review-reply.md`。
 
 ### ✅ 2026-08-12：#215123 的衝突已解
 
@@ -485,9 +529,14 @@ PR 描述（＝ commit 訊息，squash merge 後就是它）：[`patches/m1b-sca
       ✅ 這次 `gh pr create --body-file` 沒有踩到 projects-classic 那個坑
       （只有 `gh pr edit --body-file` 會），描述 2630 字元完整寫入，已回讀確認。
 
-- [ ] **🔥 #214637 已 APPROVED，已請 kuhar 代 merge** — 留言裡附了
-      `Hung-Kuan Tseng <tseng.tim096@gmail.com>` 並說明舊 commit 也是同一人。
-      **等 premerge 綠 → 等他動手。**
+- [x] **🎉 #214637 已 MERGE** — 2026-08-12 13:39 UTC，`kuhar` 代 merge，
+      squash commit `2a0c335d4538`。第三個進上游的 commit。
+      留言裡附 `Hung-Kuan Tseng <tseng.tim096@gmail.com>` 說明作者身分那招有效。
+
+- [ ] **🔥 #215696 的回覆還沒送出** — 三點都已改完並 force-push（head `21ffbbcf9bc2`），
+      草稿在 `patches/index-ceildivs-intmin-review-reply.md`，三個 comment id：
+      `3766876868`（`IndexOps.cpp`）、`3766876874`（canonicalize 測試）、
+      `3766876880`（index-to-llvm 測試）。**送出前先確認 (a) 那個刻意偏離要不要保留。**
 
 - [x] **#215696 同步兩項優化** — 先判符號本來就是對的，乘法取代 srem 已補上。
       兩個 dialect 的 ceildivs 現在算法完全一樣。
@@ -510,8 +559,9 @@ PR 描述（＝ commit 訊息，squash merge 後就是它）：[`patches/m1b-sca
       （`ceildivsi_overflow` → `ceildivsi_minint_dividend`）。
       [留言連結](https://github.com/llvm/llvm-project/pull/214637#issuecomment-5253490654)
 
-- [ ] **等 review** — 只剩 #215123 是真的零 review（開了 3 天）。
-      #214637、#215318 都已進 review，**球在我這邊**，見上面 push 那一項。
+- [ ] **等 review** — 只剩 #215123 是真的零 review（開了 3 天，全綠、mergeable）。
+      **可以考慮 ping。** #215318 已回覆完，球在 `banach-space`；
+      #215696 已改完 push，剩回覆要送。
 
 - [ ] **等兩個 issue 的方向** — #215295（scale 語意，兩位 maintainer 對怎麼修沒共識，
       我的回覆送出後尚無新回應）、#215445（`APFloat::convert` 不回報 sign／zero 失真，含 crash，
