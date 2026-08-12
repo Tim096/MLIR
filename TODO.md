@@ -26,7 +26,7 @@
 | [#214637](https://github.com/llvm/llvm-project/pull/214637) | M1-a：`ceildivsi` MININT 折疊 | ✅ **`kuhar` APPROVED**（2026-08-12，共三輪 review）。最後一個 nit 已改，head `a92dedfc02bd` | 待重跑 |
 | [#215123](https://github.com/llvm/llvm-project/pull/215123) | M1-b：`scaling_extf`/`scaling_truncf` 常數折疊 | 衝突已解（rebase，head `6319069bfd7b`），`mergeable=true`。描述已同步。零 review | **全綠**（Linux / Windows / AArch64 / code_formatter / LLVM_ABI） |
 | [#215318](https://github.com/llvm/llvm-project/pull/215318) | M1-d：transfer permutation lowering 支援 masked op | **`banach-space` 2026-08-11 18:27 review 了**（三點）。本地已全部處理，**尚未 push** | 全綠（舊 head `3eddbc33`） |
-| [#215696](https://github.com/llvm/llvm-project/pull/215696) | 從 #214637 拆出：`index`／inference 的 `ceildivs` INT_MIN 一致性 | **2026-08-12 開出**，head `b98eff9e3d64`，3 個 commit，`mergeable=true` | 待跑 |
+| [#215696](https://github.com/llvm/llvm-project/pull/215696) | 從 #214637 拆出：`index`／inference 的 `ceildivs` INT_MIN 一致性 | **2026-08-12 開出**，3 個 commit，零 review。已同步 kuhar 的兩項優化，head `489cb898c5cb` | 待跑 |
 
 ### ✅ 2026-08-12：#215123 的衝突已解
 
@@ -116,26 +116,32 @@ if (a.isNegative() != b.isNegative() || a.srem(b).isZero())
 寫 fold 的條件式要先問每個 disjunct「多貴、多常中」，便宜且常中的放左邊；
 同一份邏輯若跨 dialect 重複，順序也要一起對齊。
 
+**順著同一個方向再往前一步**（本人指示：成本低、同一類，就一起做）：
+`a.srem(b).isZero()` 換成 `quotient * b == a`。srem 是除法，乘法便宜得多，
+而且這正是 `ExpandOps.cpp` 的 ceildivsi expansion 在用的形狀
+（commit message 本來就寫「mirrors the expansion」，現在名副其實）。
+**等價性**：`q*b` 的精確值是 `a - r`，必定在範圍內、不會 wrap，
+所以 `q*b == a ⟺ r == 0`。用 python 對全部 65279 組 i8 pair 驗過，零不符。
+於是同號路徑也不再需要第二次除法——kuhar 只點掉異號那一半，這一步把另一半也拿掉。
+
 改動併回 folder 那個 commit（不另開一個修自己的 commit），
 新 head `a92dedfc02bd`，相對舊 head 只差那一行。`check-mlir` 3848 passed / 0 failed。
 已 force-push ＋ [inline 回覆](https://github.com/llvm/llvm-project/pull/214637#discussion_r3763597542)。
 **force-push 沒有讓 APPROVED 消失**（LLVM 沒設 dismiss stale reviews），已回讀確認。
 
-### ⚠️ 2026-08-12 發現：兩批貢獻的 git 署名不一致
+### ✅ 2026-08-12 已定案：git 署名一律用 `Hung-Kuan Tseng <tseng.tim096@gmail.com>`
 
-| 已 merge 的兩個 commit | 目前三條分支上的 commit |
+| 已 merge 的兩個 commit | 現在起（三條分支都已是） |
 |---|---|
-| `曾鈜寬 Tseng Hung Kuan <P76091014@gs.ncku.edu.tw>` | `Hung-Kuan Tseng <tseng.tim096@gmail.com>` |
+| `曾鈜寬 Tseng Hung Kuan <P76091014@gs.ncku.edu.tw>` | **`Hung-Kuan Tseng <tseng.tim096@gmail.com>`** |
 
-（`78e17e70bd52` / `794aa0fd923a` 對上 #214637、#215318、#215696 的所有 commit。）
+（`78e17e70bd52` / `794aa0fd923a` 是舊的那批。）
 
-LLVM 是 squash merge，**author 取自 PR 上的 commit**，所以照現況合下去，
-upstream 的 `git log` 會出現兩個看起來不同的人。對履歷來說貢獻會被拆成兩份。
+LLVM 是 squash merge、author 取自 PR 上的 commit，所以 upstream 的 `git log`
+會有兩個看起來不同的人。**本人決定：不回頭改舊的，新的一律用 gmail 這個**，
+並在請 kuhar 代 merge 時直接說明「之前那個也是我」。
 
-**要決定**：統一到哪一個。若要改，三條分支都得 rebase 改 author 再 force-push
-（`git rebase --exec 'git commit --amend --no-edit --reset-author'`，
-搭配 `git -c user.name=... -c user.email=...`），而且 #214637 已經 APPROVED，
-動它要重新確認 approve 還在。**改之前先問過本人。**
+**以後開新分支前先確認 `git config user.email`**，不要再分岔。
 
 ### 🔥 2026-08-12 晚：kuhar 第二輪 review → `inferCeilDivS` 拆成獨立 PR
 
@@ -479,9 +485,12 @@ PR 描述（＝ commit 訊息，squash merge 後就是它）：[`patches/m1b-sca
       ✅ 這次 `gh pr create --body-file` 沒有踩到 projects-classic 那個坑
       （只有 `gh pr edit --body-file` 會），描述 2630 字元完整寫入，已回讀確認。
 
-- [ ] **🔥 #214637 已 APPROVED，要請人代 merge** — 等 premerge 綠了再開口
-      （沒有 commit access）。**開口前先解決上面那則署名不一致**，
-      因為代 merge 的人會問要用哪個 name/email。
+- [ ] **🔥 #214637 已 APPROVED，已請 kuhar 代 merge** — 留言裡附了
+      `Hung-Kuan Tseng <tseng.tim096@gmail.com>` 並說明舊 commit 也是同一人。
+      **等 premerge 綠 → 等他動手。**
+
+- [x] **#215696 同步兩項優化** — 先判符號本來就是對的，乘法取代 srem 已補上。
+      兩個 dialect 的 ceildivs 現在算法完全一樣。
 
 - [x] **回覆全部送出** — 2026-08-12（UTC 08-11 23:17）：
       #214637 一則 top-level（[5259965488](https://github.com/llvm/llvm-project/pull/214637#issuecomment-5259965488)）；
