@@ -9,24 +9,94 @@
 >
 > 新 session 開場建議直接說：「讀 Goal.md 和 TODO.md，然後接續」。
 
-最後更新：2026-08-12
+最後更新：2026-08-13
 
 ---
 
 ## 一句話現況
 
 **🎉 M0 里程碑達成。第三個 commit 進去了，`arith` 的 `ceildivsi` MININT 折疊。**
-**六個 PR：3 merged、3 open。**
-**#215696（`kuhar`）三點都改完、回覆已送出；#215318（`banach-space`）也在等 reviewer。**
+**六個 PR：3 merged、3 open。#215318 已 APPROVED，等人代 merge（第四個）。**
+**三個 open PR 今天都回覆過了，球全在 reviewer 那邊。**
 
-| PR | 內容 | 狀態（2026-08-12 實查） | CI |
+| PR | 內容 | 狀態（2026-08-13 實查） | CI |
 |---|---|---|---|
 | [#214622](https://github.com/llvm/llvm-project/pull/214622) | M0：`AtomicRMWKind` switch 窮盡（NFC） | ✅ **已 MERGE**（2026-08-09 15:03，merge commit `78e17e70bd52`） | — |
 | [#214919](https://github.com/llvm/llvm-project/pull/214919) | M1-b0：`f8E8M0FNU` NaN 被折成 Inf | ✅ **已 MERGE**（2026-08-10 11:09 UTC，merge commit `794aa0fd923a`） | 全綠 |
 | [#214637](https://github.com/llvm/llvm-project/pull/214637) | M1-a：`ceildivsi` MININT 折疊 | ✅ **已 MERGE**（2026-08-12 13:39 UTC，`kuhar` 代 merge，squash commit `2a0c335d4538`） | 全綠 |
-| [#215123](https://github.com/llvm/llvm-project/pull/215123) | M1-b：`scaling_extf`/`scaling_truncf` 常數折疊 | 衝突已解（rebase，head `6319069bfd7b`），`mergeable=true`。描述已同步。**零 review，開了 3 天** | **全綠**（Linux / Windows / AArch64 / code_formatter / LLVM_ABI） |
-| [#215318](https://github.com/llvm/llvm-project/pull/215318) | M1-d：transfer permutation lowering 支援 masked op | `banach-space` 2026-08-11 18:27 review 三點，已全部回覆並 push（head `d0170cd77b5c`）。**球在 reviewer 那邊** | 全綠 |
-| [#215696](https://github.com/llvm/llvm-project/pull/215696) | 從 #214637 拆出：`index`／inference 的 `ceildivs` INT_MIN 一致性 | **`kuhar` 2026-08-12 13:35 review 三點**（inline，COMMENTED）。三點都改完，amend 進第一個 commit 後 force-push，head `7a0d9f0ea804`，`mergeable=true`。**回覆已送出，球在 reviewer 那邊** | 待跑 |
+| [#215123](https://github.com/llvm/llvm-project/pull/215123) | M1-b：`scaling_extf`/`scaling_truncf` 常數折疊 | `tgymnich` 2026-08-12 留一則 inline suggestion（`zip_equal`），已採用並 force-push（head `36f2f3ab9b33`）。**已請他順便看實質面** | 全綠 |
+| [#215318](https://github.com/llvm/llvm-project/pull/215318) | M1-d：transfer permutation lowering 支援 masked op | ✅ **`banach-space` 2026-08-12 14:35 APPROVED**（"LGTM, thank you!"）。head `d0170cd77b5c`，全綠、mergeable。**已留言請他代 merge** | 全綠 |
+| [#215696](https://github.com/llvm/llvm-project/pull/215696) | 從 #214637 拆出：`ceildivs` INT_MIN 在 fold／兩個 index lowering／affine 展開／inference 全部一致 | **`kuhar` 2026-08-12 20:03 第二輪**：SPIR-V 與 affine 兩條 lowering 也要一起修。已做完，四個 commit，head `9cafe941bf39`，`mergeable=true`。**回覆已送出** | 待跑 |
+
+### 🔥 2026-08-13：#215696 第二輪 review — 另外兩條 lowering 也要修
+
+`kuhar` 2026-08-12 20:03 的 review body（不是 inline）：共用的 inference 改動落地前，
+**`IndexToSPIRV.cpp:103` 與 `Affine/Utils/Utils.cpp:177` 這兩條 lowering 也還在 negate**。
+兩條都做了，各自放在 inference commit 之前，維持「每個 commit 之後樹裡都沒有不一致」。
+
+| commit | 內容 |
+|---|---|
+| `86d0a8a60d8c` | index folder ＋ IndexToLLVM ＋ **IndexToSPIRV** |
+| `9804e901fdd6` | **affine `ceildiv` 展開** |
+| `a59259828f74` | 刪 `inferCeilDivS` 兩層 workaround |
+| `9cafe941bf39` | 32-bit inference 回歸測試 |
+
+**SPIR-V** 照抄 IndexToLLVM 的形狀。用 arith i32 把新舊兩串序列各自算出來對照：
+舊 `306783378`、新 `-306783378`。
+
+**affine 刻意沒照抄**：affine `ceildiv` 規定除數必為正（`visitCeilDivExpr` 本來就對
+非正的常數除數報錯，舊展開也是靠這個假設），所以同號判斷可以整個收掉，只剩一個比較：
+
+```
+a ceildiv b = let q = a / b in a > q * b ? q + 1 : q
+```
+
+`q * b` 就是 `a` 減掉餘數，`b > 0` 時「`a` 大於它」等價於「除不盡且商為正」。
+回覆裡有寫明這是刻意偏離，並說「要對齊的話我加回符號判斷」。
+
+實測 `INT64_MIN ceildiv 7`：舊 `1317624576693539401`、新 `-1317624576693539401`
+（＝ kuhar 給的數字）。**展開是三者裡唯一走鐘的那個**——affine 自己的常數折疊走
+`divideCeilSigned`，本來就給精確的負商，所以早在 inference 之前 fold 與 lowering 就不一致。
+
+> 💡 **又踩到同一個機制，這次是 affine**：`-lower-affine` 也是 dialect conversion，
+> **fold 先於 pattern**。`affine.apply` 的運算元是常數的話，affine 自己的 folder 就把它折掉了，
+> **展開根本不會跑**——那樣寫的回歸測試在舊程式碼上照樣會過。
+> 解法：把被除數藏在 `arith.addi %cmin, %c0` 後面，lower-affine 當下看不到常數屬性，
+> 展開就會跑；後面的 `-canonicalize` 再把整串折成常數。
+> **負向對照做過**：把展開還原重編，該測試 fail 並印出正的那個值。
+
+`check-mlir` 3848 passed / 0 failed，`git clang-format` 乾淨。
+PR 描述已同步成四個 commit 的版本（`gh api -X PATCH`，已回讀）。
+舊 stack 留在 `backup/index-ceildivs-prespirv-0813`。
+
+回覆稿：[`patches/index-ceildivs-lowering-paths-reply.md`](patches/index-ceildivs-lowering-paths-reply.md)
+
+### ✅ 2026-08-13：#215318 已 APPROVED，已請 banach-space 代 merge
+
+`banach-space` 2026-08-12 14:35 UTC 給 APPROVED（"LGTM, thank you!"），
+premerge 五項全綠、`mergeable=true`。已留言請他代 merge，
+並照 #214637 的做法在留言裡挑明兩個 git 署名是同一個人。
+留言：[5279547544](https://github.com/llvm/llvm-project/pull/215318#issuecomment-5279547544)
+
+### ✅ 2026-08-13：#215123 收到 tgymnich 的 suggestion，已採用
+
+唯一一則 inline（`ArithOps.cpp:1878`）：手動 `scaleIt++` 換成
+`llvm::zip_equal(inElements, scaleElements)`。採用，head `36f2f3ab9b33`。
+回覆點出長度相等本來就是前置條件（上面的 guard 已經擋掉不等長），
+所以 `zip_equal` 的 assert 只是把這層耦合寫明。
+`check-mlir` 3848 passed / 0 failed。
+順便問他要不要看實質面（只折 `f8E8M0FNU` scale、NaN 特判這兩個決定）。
+
+### ✅ 2026-08-13：兩個 issue 各 ping 一次（都帶新東西，不是純催）
+
+- **#215445**：新資料點——`hasSignedRepr == false` 的**不只 E8M0**，
+  `f8E5M3FNU` 也是，實測 `arith.constant -2.0 : f8E5M3FNU` 同樣 crash
+  （連 pass 都不用跑）。所以這是該類格式的性質，該修在 `convert` 而不是某個呼叫端。
+  並宣告「沒人反對就送回報 loss 的 patch，兩個 reproducer 都當測試」。
+  ⚠️ `hasZero == false` 目前仍只有 E8M0 一個。
+- **#215295**：把問題再收窄成一句「truncf → E8M0 是 RNE 還是取 exponent」，
+  兩個答案各自對應要改哪一邊；補上「唯一寫得出來的 rounding mode 正好被
+  `F8E8M0TruncFOpConverter` 拒絕」這個副作用；再問一次 krzysz00 的 E5M3 論點。
 
 ### 🔥 2026-08-12：#214637 merge，同一分鐘 #215696 收到 review
 
@@ -563,14 +633,15 @@ PR 描述（＝ commit 訊息，squash merge 後就是它）：[`patches/m1b-sca
       （`ceildivsi_overflow` → `ceildivsi_minint_dividend`）。
       [留言連結](https://github.com/llvm/llvm-project/pull/214637#issuecomment-5253490654)
 
-- [ ] **等 review** — 只剩 #215123 是真的零 review（開了 3 天，全綠、mergeable）。
-      **可以考慮 ping。** #215318 已回覆完，球在 `banach-space`；
-      #215696 已改完 push，剩回覆要送。
+- [ ] **等三個 PR 的回應（2026-08-13 全部回覆完，球都不在我這邊）**
+      — #215318 等 `banach-space` 代 merge；#215696 等 `kuhar` 看第二輪的兩條 lowering；
+      #215123 等 `tgymnich`。
 
-- [ ] **等兩個 issue 的方向** — #215295（scale 語意，兩位 maintainer 對怎麼修沒共識，
-      我的回覆送出後尚無新回應）、#215445（`APFloat::convert` 不回報 sign／zero 失真，含 crash，
-      **triager 已上標 `llvm:support` / `mlir:arith`**，零回應）。
-      詳見上面「線 A」與「線 A′」。**方向確定才動手，不要替 maintainer 選邊。**
+- [ ] **等兩個 issue 的方向** — #215295（scale 語意，兩位 maintainer 對怎麼修沒共識）、
+      #215445（`APFloat::convert` 不回報 sign／zero 失真，含 crash）。
+      **2026-08-13 各 ping 一次，都帶了新資訊**（見上面）。
+      #215445 已表態「沒人反對就送 patch」，**再等一輪沒人回就動手**；
+      #215295 仍然不要替 maintainer 選邊。
 
 - [x] **M1-b0：`f8E8M0FNU` 的 NaN 被折成 Infinity（APFloat miscompile）**
       — 做 M1-b 探測邊界時撞到的。**已送出 [PR #214919](https://github.com/llvm/llvm-project/pull/214919)**
