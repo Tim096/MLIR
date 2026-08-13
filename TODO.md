@@ -29,6 +29,37 @@
 | [#215696](https://github.com/llvm/llvm-project/pull/215696) | 從 #214637 拆出：`ceildivs` INT_MIN 在 fold／兩個 index lowering／affine 展開／inference 全部一致 | **`kuhar` 2026-08-12 20:03 第二輪**：SPIR-V 與 affine 兩條 lowering 也要一起修。已做完，四個 commit，head `9cafe941bf39`，`mergeable=true`。**回覆已送出** | 待跑 |
 | [#216056](https://github.com/llvm/llvm-project/pull/216056) | 🆕 `APFloat::convert` 不回報 sign／zero 失真（含 crash） | `tgymnich` 在 #215445 綠燈後當天送出。兩個 commit，head `c3b8cccc8639`。**第一個動到 `llvm/lib/Support` 的 patch** | 跑中 |
 
+### ⭐ 2026-08-13 傍晚：tgymnich 定案「scaling op 就是取 exponent」
+
+他 15:05 的回覆（#215123）是這幾天最有價值的一則，兩件事：
+
+1. **「I'm ok with landing the other FP types as a follow up.」** — 我提的順序被接受。
+2. **`scaling_extf`／`scaling_truncf` 對 scale 一律取 exponent，依據是 OCP MXFP 規格**
+   （不是「pass 現在剛好這樣做」）。而 **`arith.truncf` 本身仍未定案**。
+
+**這一刀把兩個問題切乾淨了**：scaling op 的語意從此**不依賴** truncf 怎麼定，
+只有 `ExpandOps.cpp` 的展開還依賴（它是透過一個沒帶 rounding mode 的 `arith.truncf`
+走到 E8M0 的，正是 tgymnich 自己在 #215295 提議要改成 `truncf ... downward` 的那條）。
+
+**follow-up 因此解鎖**（等 #215123 merge 後做）：
+
+| 要做什麼 | 細節 |
+|---|---|
+| 折任何 float scale | 取 exponent ＝ `rmTowardZero` 轉換（對這個格式裝得下的值等價） |
+| **不折負的與零的 scale** | bit-level 的取 exponent 會丟掉符號、且 `0x00` 一邊讀 `0.0` 一邊讀 2^-127（#216056）。folder 靜靜丟掉符號比不折更糟 |
+| inf／NaN | 兩條路都落在 `0xFF`，一致 |
+| 驗證 | 全部 65536 個 f16 scale 對 `--arith-expand=include-f8e8m0 -canonicalize` |
+
+同時已在 #215295 把問題收窄成剩下的那一題（truncf 是 RNE 還是取 exponent），
+並指出 krzysz00 原本想要的「拒收非 E8M0 scale」可以換成
+「展開時把想要的轉換寫明」——同樣的效果、不用拒收。
+
+### ✅ #216056 premerge 全綠
+
+Linux／AArch64／Windows／macOS arm64／code_formatter／LLVM_ABI 全過，`mergeable=clean`。
+**Linux 那輪會跑 check-llvm**，也就是本機沒跑到的那部分——APFloat 改動沒有打到任何
+LLVM 端的既有測試。
+
 ### 🔥 2026-08-13 下午：tgymnich 三連回，開了第七個 PR
 
 一天內 tgymnich 回了三個地方，全部都要動：
