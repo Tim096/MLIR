@@ -16,8 +16,8 @@
 ## 一句話現況
 
 **🎉 M0 里程碑達成。第三個 commit 進去了，`arith` 的 `ceildivsi` MININT 折疊。**
-**六個 PR：3 merged、3 open。#215318 已 APPROVED，等人代 merge（第四個）。**
-**三個 open PR 今天都回覆過了，球全在 reviewer 那邊。**
+**七個 PR：3 merged、4 open。#215318 已 APPROVED，等人代 merge（第四個）。**
+**四個 open PR 今天都回覆／送出過了，球全在 reviewer 那邊。**
 
 | PR | 內容 | 狀態（2026-08-13 實查） | CI |
 |---|---|---|---|
@@ -27,6 +27,7 @@
 | [#215123](https://github.com/llvm/llvm-project/pull/215123) | M1-b：`scaling_extf`/`scaling_truncf` 常數折疊 | `tgymnich` 2026-08-12 留一則 inline suggestion（`zip_equal`），已採用並 force-push（head `36f2f3ab9b33`）。**已請他順便看實質面** | 全綠 |
 | [#215318](https://github.com/llvm/llvm-project/pull/215318) | M1-d：transfer permutation lowering 支援 masked op | ✅ **`banach-space` 2026-08-12 14:35 APPROVED**（"LGTM, thank you!"）。head `d0170cd77b5c`，全綠、mergeable。**已留言請他代 merge** | 全綠 |
 | [#215696](https://github.com/llvm/llvm-project/pull/215696) | 從 #214637 拆出：`ceildivs` INT_MIN 在 fold／兩個 index lowering／affine 展開／inference 全部一致 | **`kuhar` 2026-08-12 20:03 第二輪**：SPIR-V 與 affine 兩條 lowering 也要一起修。已做完，四個 commit，head `9cafe941bf39`，`mergeable=true`。**回覆已送出** | 待跑 |
+| [#216056](https://github.com/llvm/llvm-project/pull/216056) | 🆕 `APFloat::convert` 不回報 sign／zero 失真（含 crash） | `tgymnich` 在 #215445 綠燈後當天送出。兩個 commit，head `c3b8cccc8639`。**第一個動到 `llvm/lib/Support` 的 patch** | 跑中 |
 
 ### 🔥 2026-08-13 下午：tgymnich 三連回，開了第七個 PR
 
@@ -68,13 +69,23 @@ clang-format 乾淨；兩個 reproducer 都實測過（fold 不再發生、liter
 `Pradeep-Kumar-CB`，實際是 `schwarzschild-radius`（`gh api repos/.../commits/<sha> --jq .author.login`）。
 已編輯留言修掉。**帳號一律用 API 查，不要從人名猜。**
 
-### ✅ 2026-08-13：#215123 的 NaN 特判已拿掉
+### ✅ 2026-08-13：#215123 的 NaN 特判已拿掉（sweep 已重跑確認）
 
 `getScalingCastNaN` 整個刪掉，兩個 fold 裡的 `if (scale.isNaN())` 也刪掉。
+head `b6b2ddb25dc5`，PR 描述已同步，premerge 全綠。
 **lit 測試零改動、全過**——包括三個 NaN 測試：E8M0 的 NaN 加寬本來就無損，
 所以一般路徑照樣折得出 NaN；而 finite-only 結果型別（`f4E2M1FN`）那個，
 `convertFloatValue` 本來就會擋（實測 `arith.truncf %nan : f32 to f4E2M1FN` 不折）。
-真正失去的只有「輸入加寬有損 ＋ NaN scale」這種組合，現有測試與 sweep 都碰不到。
+真正失去的只有「輸入加寬有損 ＋ NaN scale」這種組合，枚舉空間裡碰不到。
+
+**窮盡 sweep 重跑（16,777,216 組，truncf 那輪 2292 秒）：三張表數字一字未變**
+（656/4096、4096/4096、33390/16777216，三項檢查全 0 分歧）。
+
+放寬 scale 型別（他的第一點）已回覆說明順序：先 land 現在這版 →
+#215295 定案 → 再依定案的 rounding mode 放寬，並對 65536 個 f16 scale 做窮盡比對。
+理由是「跟 expansion 一致」＝往零捨去，那正是 #215295 在決定的事；
+而寬 scale 可能為負或零，需要 #216056 先進去。
+[回覆連結](https://github.com/llvm/llvm-project/pull/215123#issuecomment-5282032177)
 
 ### 🔥 2026-08-13：#215696 第二輪 review — 另外兩條 lowering 也要修
 
