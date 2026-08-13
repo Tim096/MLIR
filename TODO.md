@@ -28,6 +28,54 @@
 | [#215318](https://github.com/llvm/llvm-project/pull/215318) | M1-d：transfer permutation lowering 支援 masked op | ✅ **`banach-space` 2026-08-12 14:35 APPROVED**（"LGTM, thank you!"）。head `d0170cd77b5c`，全綠、mergeable。**已留言請他代 merge** | 全綠 |
 | [#215696](https://github.com/llvm/llvm-project/pull/215696) | 從 #214637 拆出：`ceildivs` INT_MIN 在 fold／兩個 index lowering／affine 展開／inference 全部一致 | **`kuhar` 2026-08-12 20:03 第二輪**：SPIR-V 與 affine 兩條 lowering 也要一起修。已做完，四個 commit，head `9cafe941bf39`，`mergeable=true`。**回覆已送出** | 待跑 |
 
+### 🔥 2026-08-13 下午：tgymnich 三連回，開了第七個 PR
+
+一天內 tgymnich 回了三個地方，全部都要動：
+
+| 在哪 | 他說什麼 | 我怎麼做 |
+|---|---|---|
+| #215445 | "good find! Reporting the loss of sign and zero sound like the right thing to do here. Feel free to send a patch." | ✅ 已送 **[PR #216056](https://github.com/llvm/llvm-project/pull/216056)** |
+| #215123 | ① 任何 scale 型別都能折，只要跟 expansion 一致 ② NaN 特判先拿掉 | ② 已做完（見下）；① 排在 #216056 之後 |
+| #215295 | 提第三條路：rounding mode 顯式化，expansion 只收 `downward`／`to_nearest_even`，`scaling_extf` 改發 `truncf %x downward` | 已回覆支持並補三個要先釘的點 |
+
+### 🆕 [PR #216056](https://github.com/llvm/llvm-project/pull/216056)：APFloat 不回報 sign／zero 失真
+
+分支 `apfloat-unrepresentable-sign-zero`，基準 `a558267da71f`，**兩個 commit**。
+這是第一個動到 `llvm/lib/Support` 的 patch（不是 MLIR）。
+
+| commit | 內容 |
+|---|---|
+| `77bf8c72735a` | `IEEEFloat::convert` 在目標 `hasSignedRepr == false` 或 `hasZero == false` 時回報 `opInexact` ＋ `losesInfo`；值本身不變 |
+| `c3b8cccc8639` | MLIR parser 拒收「沒有符號表示的型別」的負字面值 |
+
+**為什麼要兩個 commit**：第二個 reproducer（直接寫 `arith.constant -2.0 : f8E8M0FNU`）
+**不經過 `losesInfo`**——`parseFloatAttr` 走 `FloatAttr::get`，根本不看回報，
+所以只有 APFloat 那半是修不掉它的。兩條 literal 路徑（scalar 的 `parseFloatAttr`、
+dense 的 `parseFloatFromLiteral`）都要擋。
+
+⚠️ **動到一個既有測試的期望值**：`APFloatTest.ConvertDoubleToE8M0FNU` 原本斷言
+`0.0 → E8M0` 是 `opOK` ＋ `losesInfo == false`（註解寫「zero encoding is
+represented as the smallest normalized value」）。替代值 2^-127 我保留，
+只把兩行狀態翻掉，並在 PR 描述裡單獨開一節點名這件事，請 reviewer 確認。
+
+**技術細節**：`convert` 裡 NaN 那段原本 `return` 提早離開，我改成 else 分支
+落到共同結尾，這樣新的檢查看得到每一條路徑。
+
+驗證：`ADTTests` 2188 passed / 0 failed、`check-mlir` 3848 passed / 0 failed、
+clang-format 乾淨；兩個 reproducer 都實測過（fold 不再發生、literal 出診斷而非 abort）。
+
+⚠️ **踩到自己的舊教訓**：我在留言裡把 `Pradeep Kumar` 的 GitHub 帳號猜成
+`Pradeep-Kumar-CB`，實際是 `schwarzschild-radius`（`gh api repos/.../commits/<sha> --jq .author.login`）。
+已編輯留言修掉。**帳號一律用 API 查，不要從人名猜。**
+
+### ✅ 2026-08-13：#215123 的 NaN 特判已拿掉
+
+`getScalingCastNaN` 整個刪掉，兩個 fold 裡的 `if (scale.isNaN())` 也刪掉。
+**lit 測試零改動、全過**——包括三個 NaN 測試：E8M0 的 NaN 加寬本來就無損，
+所以一般路徑照樣折得出 NaN；而 finite-only 結果型別（`f4E2M1FN`）那個，
+`convertFloatValue` 本來就會擋（實測 `arith.truncf %nan : f32 to f4E2M1FN` 不折）。
+真正失去的只有「輸入加寬有損 ＋ NaN scale」這種組合，現有測試與 sweep 都碰不到。
+
 ### 🔥 2026-08-13：#215696 第二輪 review — 另外兩條 lowering 也要修
 
 `kuhar` 2026-08-12 20:03 的 review body（不是 inline）：共用的 inference 改動落地前，
