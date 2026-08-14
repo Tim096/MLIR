@@ -9,15 +9,15 @@
 >
 > 新 session 開場建議直接說：「讀 Goal.md 和 TODO.md，然後接續」。
 
-最後更新：2026-08-13
+最後更新：2026-08-14
 
 ---
 
 ## 一句話現況
 
-**🎉 M0 里程碑達成。第三個 commit 進去了，`arith` 的 `ceildivsi` MININT 折疊。**
-**七個 PR：3 merged、4 open。#215318 已 APPROVED，等人代 merge（第四個）。**
-**四個 open PR 今天都回覆／送出過了，球全在 reviewer 那邊。**
+**🎉 第四個 commit 進去了，而且是第一個 `vector` 的（#215318，M1-d）。**
+**七個 PR：4 merged、3 open。三個 open 全部回覆完，球都在 reviewer 那邊。**
+**⚠️ kuhar 這輪打的兩點都是風格問題（描述講太滿、註解寫變更史），已記進長期記憶。**
 
 | PR | 內容 | 狀態（2026-08-13 實查） | CI |
 |---|---|---|---|
@@ -25,9 +25,81 @@
 | [#214919](https://github.com/llvm/llvm-project/pull/214919) | M1-b0：`f8E8M0FNU` NaN 被折成 Inf | ✅ **已 MERGE**（2026-08-10 11:09 UTC，merge commit `794aa0fd923a`） | 全綠 |
 | [#214637](https://github.com/llvm/llvm-project/pull/214637) | M1-a：`ceildivsi` MININT 折疊 | ✅ **已 MERGE**（2026-08-12 13:39 UTC，`kuhar` 代 merge，squash commit `2a0c335d4538`） | 全綠 |
 | [#215123](https://github.com/llvm/llvm-project/pull/215123) | M1-b：`scaling_extf`/`scaling_truncf` 常數折疊 | `tgymnich` 2026-08-12 留一則 inline suggestion（`zip_equal`），已採用並 force-push（head `36f2f3ab9b33`）。**已請他順便看實質面** | 全綠 |
-| [#215318](https://github.com/llvm/llvm-project/pull/215318) | M1-d：transfer permutation lowering 支援 masked op | ✅ **`banach-space` 2026-08-12 14:35 APPROVED**（"LGTM, thank you!"）。head `d0170cd77b5c`，全綠、mergeable。**已留言請他代 merge** | 全綠 |
+| [#215318](https://github.com/llvm/llvm-project/pull/215318) | M1-d：transfer permutation lowering 支援 masked op | ✅ **已 MERGE**（2026-08-13 16:20 UTC，`banach-space` 代 merge，squash commit `1ccdf48548ed`）。**第一個 vector commit** | 全綠 |
 | [#215696](https://github.com/llvm/llvm-project/pull/215696) | 從 #214637 拆出：`ceildivs` INT_MIN 在 fold／兩個 index lowering／affine 展開／inference 全部一致 | **`kuhar` 2026-08-12 20:03 第二輪**：SPIR-V 與 affine 兩條 lowering 也要一起修。已做完，四個 commit，head `9cafe941bf39`，`mergeable=true`。**回覆已送出** | 待跑 |
 | [#216056](https://github.com/llvm/llvm-project/pull/216056) | 🆕 `APFloat::convert` 不回報 sign／zero 失真（含 crash） | `tgymnich` 在 #215445 綠燈後當天送出。兩個 commit，head `c3b8cccc8639`。**第一個動到 `llvm/lib/Support` 的 patch** | 跑中 |
+
+### 🎉 2026-08-14：#215318 已 MERGE — 第四個 commit（第一個 `vector`）
+
+`banach-space` 2026-08-13 16:20 UTC 代 merge，squash commit **`1ccdf48548ed`**。
+**這是第一個進上游的 vector dialect commit**（M1-d），也是主場從 arith 往 vector 擴的第一步。
+
+他回覆署名那段的重點：**GitHub UI merge 的 email 取自 GitHub 設定、名字取自 commit**，
+並說「同一個 GitHub 帳號是我們追蹤貢獻的依據（例如日後申請 commit access）」。
+
+⚠️ **實際 merge 出來是 `Hung Kuan Tseng <tseng.tim096@gmail.com>`——少了連字號。**
+來源是 GitHub profile 的顯示名（`gh api user --jq .name`），不是 commit 的 author。
+**已定案一律用 `Hung-Kuan Tseng`**，profile 要改成一致（見「待本人處理」）。
+回覆已送出，短的，只講 email 正確 ＋ 名字已對齊 ＋ 帳號從頭到尾是 `Tim096`。
+
+### ⚠️ 2026-08-14：kuhar 第三輪 — **兩點都是風格問題，本人要求絕不再犯**
+
+| 位置 | 他說什麼 | 處理 |
+|---|---|---|
+| PR 描述 | 「五個地方算 signed ceiling division」講太滿，要收窄並講明邊界 | 拿掉數量宣稱，改成**限定「arith／index／affine 這條路上」＋ 逐條列狀態的表** |
+| `Affine/Utils.cpp:156` | 註解裡的變更史與 `divideCeilSigned`／`inferCeilDivS` 交叉引用該刪，只留當下的不變量 | 照做，砍成三句 |
+
+**兩條都已寫進長期記憶 `match-upstream-style-not-my-own`**：
+註解不寫變更史／跨檔引用（會各自過期）；描述不寫數量型全樹宣稱（無法驗證、漏一個就被抓）。
+自我檢查句：「這句三個月後還會是真的嗎？」「reviewer 能不能當場否證？」
+
+**順帶查清一件事**：他說 `arith::CeilDivSIOp::fold` 也還在 negate ——
+那是**本 PR 過期的 base**（`a558267da71f`，08-11）造成的，
+#214637 是 08-12 才 merge（`2a0c335d4538`），已經把那個 folder 換成不 negate 的版本、
+TODO 也刪了。**已 rebase 到今天的 main**，舊 head 留在 `backup/index-ceildivs-prerebase-0814`。
+重點放在「那句宣稱本來就不該那樣寫」，不是「你看錯」。
+
+### ⚠️ 2026-08-14：krzysz00 回了，**推翻 tgymnich 昨天的裁決**
+
+三點：① 「取尾數」正確名稱是 **`toward_zero` 不是 `downward`**（MLIR 拼法
+`toward_zero`，`ArithBase.td:186`）；② **反對非 E8M0 型別的 exponent-only 讀法**
+——有硬體吃 `f8E5M3U` 之類的 scale，`arith.scaling_truncf` 應該要能表達；
+③ 他當初講的 AMDGPU 是「把 `arith.truncf ... toward_zero` **摺進** `cvt_scalef32`」，
+不是拒收非 E8M0 scale。
+
+**所以昨天規劃的 #215123 follow-up（折任何 scale 型別）重新卡住**——
+兩種讀法算出的值不同（`in / 2^exp(scale)` vs `in / scale`）。
+**#215123 本身不受影響**（只折 E8M0，兩種讀法都同意），當初刻意限制的價值在這裡兌現。
+
+回覆裡放的實查事實（這是這則的重量）：
+
+| 位置 | 對非 E8M0 scale 的現況 |
+|---|---|
+| `ExpandOps.cpp:675`／`:717` | ≥16 bit 先截成 E8M0（尾數丟掉）；**`f8E5M3FNU` 是 8 bit 且非 E8M0 → 根本不 match，沒有通用展開** |
+| `ArithToAMDGPU.cpp:566` | scale 一律 ext／trunc 到 f32 交給 `amdgpu::PackedScaledTruncOp`，**任何型別都收**，尾數由硬體忽略 |
+
+＋ 一句核心：**OCP 規格定義的是 MX 格式的 E8M0 scale，沒有定義 f16／f8E5M3 的 scale
+是什麼意思**——tgymnich 引的規格能定兩人本來就同意的那半，涵蓋不到分歧的那半。
+最後把問題收成一句可判定的：`arith.scaling_truncf(in, scale : f16)` 是
+`in / scale` 還是 `in / 2^exponent(scale)`，並列出兩個答案各自要改什麼。
+
+### 🔍 2026-08-14：buildbot 失敗信 — 查清楚是別人的老問題
+
+收到 `clang-aarch64-lld-2stage` 的失敗信，blamelist 約 50 人（含 #215318）。
+**與我們無關，也不是表現機會。** 查證過程留著當往後的 SOP：
+
+1. **失敗的是哪個專案**：`compiler-rt/test/msan/release_origin.c`（MSan runtime），
+   我們動的是 MLIR——**MLIR 不會被連進 clang／compiler-rt**。
+2. **失敗長什麼樣**：斷言的字串 `soft rss limit exhausted` **有印出來**，
+   只是晚了一個取樣點（`RSS: 18Mb` 不大於門檻 18 → 不觸發；memset 之後才 `18Mb vs 19Mb`）。
+   **1MB 決定成敗。**
+3. **前科**：[#171209](https://github.com/llvm/llvm-project/issues/171209) 就是同一支測試、
+   同一個 AArch64（tstellar 實測 x86 baseline 44Mb、aarch64 57Mb），
+   [#196565](https://github.com/llvm/llvm-project/pull/196565) 的修法就是**把門檻數字調掉**
+   ——現在的 `18` 就是那次調的值，邊際只剩 1MB。
+
+唯一有實質的動作是去 #171209 留一則帶新數據點的復發回報（5 分鐘），
+但**過不了 §8.7 第 1／2 關**，決定跳過。
 
 ### ⭐ 2026-08-13 傍晚：tgymnich 定案「scaling op 就是取 exponent」
 
@@ -723,9 +795,15 @@ PR 描述（＝ commit 訊息，squash merge 後就是它）：[`patches/m1b-sca
       （`ceildivsi_overflow` → `ceildivsi_minint_dividend`）。
       [留言連結](https://github.com/llvm/llvm-project/pull/214637#issuecomment-5253490654)
 
-- [ ] **等三個 PR 的回應（2026-08-13 全部回覆完，球都不在我這邊）**
-      — #215318 等 `banach-space` 代 merge；#215696 等 `kuhar` 看第二輪的兩條 lowering；
-      #215123 等 `tgymnich`。
+- [ ] **⚠️ 待本人處理：把 GitHub profile 顯示名改成 `Hung-Kuan Tseng`**
+      （現在是 `Hung Kuan Tseng`，merge 出來的 author 取自這裡）。
+      `gh` 的 token 沒有 `user` scope，要自己跑
+      `! gh auth refresh -h github.com -s user` 後我才能改，
+      或直接到 https://github.com/settings/profile 改。
+
+- [ ] **等三個 PR 的回應（2026-08-14 全部回覆完，球都不在我這邊）**
+      — #215696 等 `kuhar`（第三輪的風格兩點已照做並 rebase）；
+      #215123 等 `tgymnich` 表態要不要 merge；#216056 等 APFloat 那邊的 reviewer。
 
 - [ ] **等兩個 issue 的方向** — #215295（scale 語意，兩位 maintainer 對怎麼修沒共識）、
       #215445（`APFloat::convert` 不回報 sign／zero 失真，含 crash）。

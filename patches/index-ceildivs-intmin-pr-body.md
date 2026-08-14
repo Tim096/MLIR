@@ -1,25 +1,25 @@
 Split out of #214637, where @kuhar pointed out that changing the shared
 `intrange::inferCeilDivS` would put it at odds with `index::CeilDivSOp`, whose
-folder and lowering are unchanged.
+folder and lowerings still negate an operand.
 
-Five places in tree compute signed ceiling division, and four of them do it by
-negating an operand:
+Negating `INT_MIN` wraps, so every implementation that computes the mixed-sign
+case as `-(-n / m)` reports a positive value where the mathematical result is
+negative. Along the arith / index / affine path, signed ceiling division is
+computed here:
 
-- `index::calculateCeilDivS`, `ConvertIndexCeilDivS` (LLVM) and
-  `ConvertIndexCeilDivSPattern` (SPIR-V) compute the mixed-sign case as
-  `-(-n / m)`.
-- `expandAffineExpr` lowers affine `ceildiv` as
-  `a <= 0 ? -(-a / b) : (a - 1) / b + 1`.
-- `intrange::inferCeilDivS` negates the quotient of `MININT / [positive
-  number]`, with a second workaround unioning in `[MININT + 1, smax]` to cover
-  the discontinuity that introduces.
+| where | before this PR |
+|---|---|
+| `arith::CeilDivSIOp::fold` | does not negate (#214637) |
+| `CeilDivSIOpConverter` in `ExpandOps.cpp` | does not negate (#133774) |
+| affine constant folding, `divideCeilSigned` | does not negate |
+| `index::calculateCeilDivS` | `-(-n / m)` |
+| `ConvertIndexCeilDivS`, IndexToLLVM | `-(-n / m)` |
+| `ConvertIndexCeilDivSPattern`, IndexToSPIRV | `-(-n / m)` |
+| `visitCeilDivExpr` in `expandAffineExpr` | `a <= 0 ? -(-a / b) : (a - 1) / b + 1` |
+| `intrange::inferCeilDivS` | negates the quotient of `MININT / [positive number]`, with a second workaround unioning in `[MININT + 1, smax]` to cover the discontinuity that introduces |
 
-Negating `INT_MIN` wraps, so all of them report a positive value where the
-mathematical result is negative. The expansion in `ExpandOps.cpp` does not
-negate anything and has computed the mathematical ceiling since #133774
-(2025-04); the workarounds in the inference were written for the expansion that
-preceded it. Affine's own constant folder, `divideCeilSigned`, does not negate
-either.
+This PR changes the last five. The workarounds in the inference were written for
+the expansion that preceded #133774 (2025-04), which is the row above them.
 
 The commits are ordered so that nothing in tree is inconsistent in between:
 
@@ -66,10 +66,9 @@ what this lowering emits, so it changes with it.
 
 ### Verification
 
-`check-mlir`: 3848 passed, 0 failed (611 unsupported, 1 expectedly failed).
-`git clang-format` clean.
+`check-mlir`: 3858 passed, 0 failed (613 unsupported, 1 expectedly failed). `git clang-format` clean.
 
-Measured before and after, on `a558267da71f`:
+Measured before and after:
 
 | | before | after |
 |---|---|---|
