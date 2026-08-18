@@ -9,25 +9,171 @@
 >
 > 新 session 開場建議直接說：「讀 Goal.md 和 TODO.md，然後接續」。
 
-最後更新：2026-08-14
+最後更新：2026-08-18
 
 ---
 
 ## 一句話現況
 
-**🎉 第四個 commit 進去了，而且是第一個 `vector` 的（#215318，M1-d）。**
-**七個 PR：4 merged、3 open。三個 open 全部回覆完，球都在 reviewer 那邊。**
-**⚠️ kuhar 這輪打的兩點都是風格問題（描述講太滿、註解寫變更史），已記進長期記憶。**
+**五個 commit 已進 upstream。剩兩個 open PR，兩個都已經被 approve，卡在沒人按 merge。**
+**#215123 tgymnich 08-17 approve（要求 rebase，已做）、#215696 kuhar 08-14 approve 等第二個人。**
+**⚠️ 新原則：已 approve 未 merge 就禮貌 ping 一次提醒（2026-08-17 本人指示，已記進長期記憶）。**
 
-| PR | 內容 | 狀態（2026-08-13 實查） | CI |
+| PR | 內容 | 狀態（2026-08-18 實查） | CI |
 |---|---|---|---|
 | [#214622](https://github.com/llvm/llvm-project/pull/214622) | M0：`AtomicRMWKind` switch 窮盡（NFC） | ✅ **已 MERGE**（2026-08-09 15:03，merge commit `78e17e70bd52`） | — |
 | [#214919](https://github.com/llvm/llvm-project/pull/214919) | M1-b0：`f8E8M0FNU` NaN 被折成 Inf | ✅ **已 MERGE**（2026-08-10 11:09 UTC，merge commit `794aa0fd923a`） | 全綠 |
 | [#214637](https://github.com/llvm/llvm-project/pull/214637) | M1-a：`ceildivsi` MININT 折疊 | ✅ **已 MERGE**（2026-08-12 13:39 UTC，`kuhar` 代 merge，squash commit `2a0c335d4538`） | 全綠 |
-| [#215123](https://github.com/llvm/llvm-project/pull/215123) | M1-b：`scaling_extf`/`scaling_truncf` 常數折疊 | `tgymnich` 2026-08-12 留一則 inline suggestion（`zip_equal`），已採用並 force-push（head `36f2f3ab9b33`）。**已請他順便看實質面** | 全綠 |
+| [#215123](https://github.com/llvm/llvm-project/pull/215123) | M1-b：`scaling_extf`/`scaling_truncf` 常數折疊 | ✅ **`tgymnich` 2026-08-17 09:41 UTC APPROVED**（「LGTM. Still needs a rebase on main」）。衝突是**我們自己的 #216056** 造成，已 rebase 到 `ecdcdf0577c1`，新 head **`96dfbf939686`**（08-18 02:28 已推、approve 未消失） | 全綠 |
 | [#215318](https://github.com/llvm/llvm-project/pull/215318) | M1-d：transfer permutation lowering 支援 masked op | ✅ **已 MERGE**（2026-08-13 16:20 UTC，`banach-space` 代 merge，squash commit `1ccdf48548ed`）。**第一個 vector commit** | 全綠 |
-| [#215696](https://github.com/llvm/llvm-project/pull/215696) | 從 #214637 拆出：`ceildivs` INT_MIN 在 fold／兩個 index lowering／affine 展開／inference 全部一致 | **`kuhar` 2026-08-12 20:03 第二輪**：SPIR-V 與 affine 兩條 lowering 也要一起修。已做完，四個 commit，head `9cafe941bf39`，`mergeable=true`。**回覆已送出** | 待跑 |
-| [#216056](https://github.com/llvm/llvm-project/pull/216056) | 🆕 `APFloat::convert` 不回報 sign／zero 失真（含 crash） | `tgymnich` 在 #215445 綠燈後當天送出。兩個 commit，head `c3b8cccc8639`。**第一個動到 `llvm/lib/Support` 的 patch** | 跑中 |
+| [#215696](https://github.com/llvm/llvm-project/pull/215696) | 從 #214637 拆出：`ceildivs` INT_MIN 在 fold／兩個 index lowering／affine 展開／inference 全部一致 | ✅ **`kuhar` 2026-08-14 14:58 APPROVED**，但同時說想要第二個 approval，點名 `@krzysz00`（**4 天未回，但他 08-17 在 #215295 是活的**）。head `358a393a`、仍 `clean` | 全綠 |
+| [#216056](https://github.com/llvm/llvm-project/pull/216056) | 🆕 `APFloat::convert` 不回報 sign／zero 失真（含 crash） | ✅ **已 MERGE**（2026-08-17 09:21 UTC，`tgymnich` 代 merge，squash commit `898b0188d901`）。**第五個 commit，也是第一個不在 MLIR 而在 `llvm/lib/Support` 的**。issue #215445 同時自動關閉 | 全綠 |
+
+### ✅ 2026-08-18：#215295 已回覆 krzysz00，並請 tgymnich 表態
+
+留言：[5322525782](https://github.com/llvm/llvm-project/issues/215295#issuecomment-5322525782)
+（2026-08-18 02:03 UTC，已回讀確認）。草稿留在
+[`patches/215295-in-over-scale-reply.md`](patches/215295-in-over-scale-reply.md)。
+
+四段：① 接受 `in / scale`，講明白他的硬體證據為什麼贏過規格解讀；
+② **請 `@tgymnich` 表態**——寫法刻意是「紀錄上有兩個相反的答案，下游取決於哪個是正解」，
+不是「你錯了」；③ 列出因此變錯的四個位置（見上一節的表，全部實查行號）；
+④ 提出接手順序，並在最後**搭便車催 #215696**（他昨天在這條線上是活的，成本近乎零）。
+
+`ArithToAMDGPU.cpp:592` 那一條**刻意寫成問句**——硬體是否只讀 exponent bit 由他的
+§15.14 定案，不自己推。
+
+### ⚠️ 2026-08-18：GitHub profile 顯示名已由本人改成 `Hung-Kuan Tseng`
+
+`gh api user --jq .name` 回 `Hung-Kuan Tseng`（已實查）。
+**在此之前 merge 的五個 commit 全部是 `Hung Kuan Tseng`（少連字號）**，包含 08-17 的
+`898b0188d901`。merge 出來的 author 名取自 profile 而非 commit，所以往後的 commit 才會對。
+**這筆已經結案，不要再列進待辦。**
+
+### 🎉 2026-08-18：#216056 已 MERGE — 第五個 commit，第一個進 `llvm/` 而非 `mlir/`
+
+`tgymnich` 2026-08-17 09:21 UTC 代 merge，squash commit **`898b0188d901`**。
+issue **#215445 同時自動關閉**（`state_reason: completed`，closed_by `tgymnich`）。
+
+意義：前四個 commit 都在 `mlir/`，這個動的是 **`llvm/lib/Support/APFloat.cpp`**——
+LLVM 的核心浮點實作，所有前端與後端共用。履歷上「改 MLIR」變成「改 LLVM 本身」。
+
+### ✅ 2026-08-18：#215123 拿到 approve，rebase 已做（衝突來源是自己人）
+
+`tgymnich` 2026-08-17 09:41 UTC **APPROVED**，全文只有一句：
+
+> LGTM. Still needs a rebase on main
+
+GitHub 的 `mergeable_state` 確實是 **`dirty`**（真衝突，不是 stale）。
+**衝突來源是我們自己的 #216056**——它也往 `mlir/test/Dialect/Arith/canonicalize.mlir`
+的同一個位置後面接測試（`truncFPConstantE8M0Negative` / `...Zero`）。
+
+| | |
+|---|---|
+| 舊 head | `b6b2ddb25dc5`（base `a558267da71f`，08-11） |
+| 新 head | **`96dfbf939686`**（base `ecdcdf0577c1`） |
+| 備份 | `backup/scaling-fold-prerebase-0818` |
+| 衝突 | 只有 `canonicalize.mlir` 一處，兩段測試接在同一行後面，**兩邊都留**即可 |
+| 驗證 | `.cpp` / `.td` 的 diff **逐字元相同**，只有 hunk 行號位移（`diff <(git show 舊) <(git show 新)` 只剩 commit sha 與 `@@` 行） |
+
+**#216056 的語意變更不會碰到這個 folder**：它讓 `APFloat::convert` 回報 sign／zero 失真，
+而這裡的轉換是**從** `f8E8M0FNU` 出來（那個方向無損）以及進到 result type，沒有測試行為改變。
+
+**驗證與推送（2026-08-18 02:28 UTC）**：
+
+| 項目 | 結果 |
+|---|---|
+| `ninja mlir-opt` | 4566/4566，exit 0（#216056 動到 `APFloat.cpp`，整棵 LLVM 重編約 1 小時） |
+| `llvm-lit canonicalize.mlir` + `expand-ops.mlir` | 2/2 PASS |
+| `ninja check-mlir` | **3873 passed / 0 failed**（1 expectedly failed、613 unsupported） |
+| `git clang-format HEAD~1` | did not modify any files |
+| force-push | 用 `--force-with-lease=refs/heads/arith-scaling-fold:b6b2ddb25dc5` 保護，成功 |
+| 回讀 PR | head 對上 `96dfbf939686`、`mergeable: true`（衝突消失）、**tgymnich 的 APPROVED 還在** |
+
+留言：[5322730819](https://github.com/llvm/llvm-project/pull/215123#issuecomment-5322730819)，
+草稿同步回 [`patches/215123-rebase-comment.md`](patches/215123-rebase-comment.md)。
+
+### ⭐ 2026-08-18：krzysz00 用 CDNA5 ISA 手冊定案 `in / scale`，**推翻 tgymnich**
+
+`krzysz00` 2026-08-17 18:07 UTC 在 #215295 回覆，這次帶的是**硬體文件**而不是規格解讀：
+
+| 來源 | 內容 |
+|---|---|
+| AMD Instinct **CDNA5 ISA** §7.12.6 | `f8E5M3` scale 是 OCP 規格的擴充，**真實硬體上存在** |
+| 同文件 §7.6.3 | E5M3 scale 的轉換 |
+| 同文件 §15.14 | `scalef32` 指令的精確定義 |
+
+他的結論一句：**`arith.scaling_truncf => in / scale` 才是對的**。
+
+這**推翻**了 08-13 記在 commit `51fc774` 的 tgymnich 裁決（「scaling ops 取 scale 的
+exponent，依 OCP MXFP 規格」）。理路是：OCP 規格定義 MX 格式的 scale 是 E8M0，所以那個
+論證只能涵蓋兩人本來就同意的那半；**真實硬體吃 E5M3 scale**，正是分歧的那半。
+
+**#215123 完全沒被波及**——當初刻意只折 `f8E8M0FNU` scale，這是第二次兌現。
+
+**這個裁決讓樹上這些東西變成錯的**（全部實查過，行號對 `ecdcdf0577c1`）：
+
+| 位置 | 今天做什麼 | 在 `in / scale` 之下 |
+|---|---|---|
+| `ExpandOps.cpp:674`、`:716` | scale 元素型別 ≥16 bit 就先 `arith.truncf` 成 `f8E8M0FNU`，註解自己寫著 "allow implicit exponent extraction from 16/32 bits floats" | **算錯值**，不只是 rounding mode 選錯：`f16` 的 scale `3.0` 在被用到之前就變成 2 的冪 |
+| `ExpandOps.cpp:682`、`:723` | 8 bit 但非 `f8E8M0FNU` 的 scale（`f8E5M3FNU`）根本不 match | krzysz00 要的那個 case 是**唯一沒有 generic 展開**的 case |
+| `ArithOps.td:1480`、`:1672` | 兩個 op 的 description 直接把 lowering 寫成 `%0 = arith.truncf %1 : f32 to f8E8M0FNU` | **文件本身寫的是 exponent-only 讀法**，這是文件變更不只是程式碼變更 |
+| `ArithToAMDGPU.cpp:592` | 任何 scale 型別都 `extf`／`truncf` 到 f32 交給 `amdgpu::PackedScaledTruncOp`（gated on gfx950） | 若 `V_CVT_SCALEF32_*` 真的只讀 exponent bit（他自己先前這樣說），這條路也在無聲丟尾數。§15.14 應該能定案，**這點要問他不要自己推**|
+
+**下一題（M1-c 候選）就在這裡**：generic expansion 改成真的用 scale 的值去乘／除。
+這是**值算錯**（比 folder 重），且題目天生長在 MXFP 量化上，§8.7 第 1、2 關天然過關。
+
+草稿：[`patches/215295-in-over-scale-reply.md`](patches/215295-in-over-scale-reply.md)
+
+### ⭐ 2026-08-17：兩個 PR 被 approve，新原則「已 approve 未 merge 就禮貌 ping」
+
+本人指示：**approve 不等於有人會按 merge**。我們沒有 commit access，reviewer 按完批准
+就去看下一個，PR 會沉。所以從現在起，**已 approve 但還沒 merge 的一律禮貌提醒一次**——
+語氣是提醒＋現況同步，每則都要帶新資訊（CI 狀態、head 自哪天起未變、還缺什麼）。
+已記進長期記憶 `ping-approved-but-unmerged-prs`。
+
+三則留言已送出並回讀：
+
+| 對象 | 內容 | 連結 |
+|---|---|---|
+| #216056 兩則 inline | matthias 要求「也檢查轉換後的值」，已照做 | [3792281450](https://github.com/llvm/llvm-project/pull/216056#discussion_r3792281450)、[3792281508](https://github.com/llvm/llvm-project/pull/216056#discussion_r3792281508) |
+| #216056 top-level | 兩個 approve ＋ CI 全綠，請 matthias／tgymnich 代 merge | [5308573973](https://github.com/llvm/llvm-project/pull/216056#issuecomment-5308573973) |
+| #215696 | 謝 kuhar 的 approve ＋ 問「繼續等 krzysz00 還是先落地」；另給 krzysz00 一段 review 導覽 | [5308574043](https://github.com/llvm/llvm-project/pull/215696#issuecomment-5308574043) |
+| #215123 | 推 tgymnich 表態，順帶點出 #215295 卡在他與 krzysz00 相反的答案 | [5308574090](https://github.com/llvm/llvm-project/pull/215123#issuecomment-5308574090) |
+
+### ✅ 2026-08-17：#216056 補上 matthias 要的值斷言（head `aa2025befe32`）
+
+原本的 `ConvertLosesUnrepresentableSignAndZero` 只斷言 `losesInfo` 與 `status`，沒斷言值。
+改法是**把巢狀迴圈拆開**——因為兩個格式對 zero 的答案不同，塞在同一個迴圈裡寫不出期望值。
+
+| 輸入 → 目標 | 轉換後實測值 |
+|---|---|
+| `-2.0` → `f8E8M0FNU`／`f8E5M3FNU` | **負號原封留著**（`isNegative()`、`convertToDouble() == -2.0`）；`losesInfo` 就是在報這件事 |
+| `+2.0` → 兩者 | `2.0`，`opOK`、`losesInfo == false` |
+| `0.0`／`-0.0` → `f8E8M0FNU` | **都變 `+2^-127`**（`makeSmallestNormalized(false)` 會清掉符號），bit pattern `0x00` |
+| `-0.0` → `f8E5M3FNU` | 仍是 `-0.0`（有 zero），只報符號失真 |
+
+**負值刻意不用 `bitcastToAPInt()` 斷言**：這兩個格式沒有符號位元，編碼根本顯示不出被帶進來的
+符號，而符號正是這個 case 在測的東西。改用 `convertToDouble()`。
+
+驗證：`ADTTests` **2188 passed / 0 failed**、`git clang-format` 乾淨；
+**負向對照**——把 `APFloat.cpp` 的新檢查關掉重編，該測試 fail（`losesInfo` false、status `opOK`）。
+force-push 後回讀：head 對上，**兩個 APPROVED 都還在**（LLVM 沒設 dismiss stale reviews，第二次確認）。
+
+> ⚠️ **這台的 git 不支援 `git stash push --staged`**（會印 usage 而不是報錯），
+> 我沒察覺就接著跑 `reset --hard`，把暫存的改動洗掉，還誤 `stash pop` 了一個舊 stash。
+> 復原方式記著：`git stash pop` 掉的那個 stash commit sha 會印在 "Dropped refs/stash@{0} (…)"，
+> 用 `git stash store -m "<原訊息>" <sha>` 就能原封放回（原訊息用 `git show -s --format=%s <sha>` 查）。
+> **通則：要把改動搬到另一個 commit 上，先 `git commit` 再說，不要靠 stash。**
+
+### ⚠️ 2026-08-17：本地 `index-ceildivs-intmin` 又落後 fork（第二次踩到）
+
+本地停在 `0e1e741d`（base `5f33e4f0`），fork/PR head 是 `358a393a`（base `17930a3c`，
+08-14 21:05 rebase 過）。**四個 commit 的 patch-id 逐一比對完全相同**，純 rebase。
+已 `git branch -f` 對齊。
+
+**通則（#215318 也發生過一次）：動任何 PR 分支前，先 `git ls-remote fork <branch>` 比對 head；
+不同就先逐 commit 比 patch-id 確認是純 rebase，再對齊本地。**
 
 ### 🎉 2026-08-14：#215318 已 MERGE — 第四個 commit（第一個 `vector`）
 
@@ -795,15 +941,18 @@ PR 描述（＝ commit 訊息，squash merge 後就是它）：[`patches/m1b-sca
       （`ceildivsi_overflow` → `ceildivsi_minint_dividend`）。
       [留言連結](https://github.com/llvm/llvm-project/pull/214637#issuecomment-5253490654)
 
-- [ ] **⚠️ 待本人處理：把 GitHub profile 顯示名改成 `Hung-Kuan Tseng`**
-      （現在是 `Hung Kuan Tseng`，merge 出來的 author 取自這裡）。
-      `gh` 的 token 沒有 `user` scope，要自己跑
-      `! gh auth refresh -h github.com -s user` 後我才能改，
-      或直接到 https://github.com/settings/profile 改。
+- [x] ~~**待本人處理：把 GitHub profile 顯示名改成 `Hung-Kuan Tseng`**~~
+      **2026-08-18 本人已改，實查 `gh api user --jq .name` 回 `Hung-Kuan Tseng`。**
+      在此之前 merge 的五個 commit 都是少連字號的版本，往後才會對。
 
-- [ ] **等三個 PR 的回應（2026-08-14 全部回覆完，球都不在我這邊）**
-      — #215696 等 `kuhar`（第三輪的風格兩點已照做並 rebase）；
-      #215123 等 `tgymnich` 表態要不要 merge；#216056 等 APFloat 那邊的 reviewer。
+- [ ] **等兩個 PR 落地** — #216056 已於 08-17 merge，剩下兩個**都已 approve、只差有人按按鈕**：
+      **#215123** `tgymnich` 08-17 approve，rebase 已做（head `96dfbf939686`），推上去後等他代 merge；
+      **#215696** `kuhar` 08-14 approve 等第二人，已在 #215295 的回覆末尾搭便車催過，
+      **不要再單獨開 ping**（08-16 才推過一次，連催兩則語氣會難看）。
+
+- [x] ~~**#216056 merge 後：關掉 #215445**~~ — `tgymnich` merge 時 GitHub 自動關掉了
+      （2026-08-17 09:21:36 UTC，`state_reason: completed`）。08-17 17:03 那則通知不是新內容，
+      是 `EugeneZelenko` 把 label 從 `mlir:arith` 改成 `mlir`，觸發機器人重貼內文給訂閱群。
 
 - [ ] **等兩個 issue 的方向** — #215295（scale 語意，兩位 maintainer 對怎麼修沒共識）、
       #215445（`APFloat::convert` 不回報 sign／zero 失真，含 crash）。
