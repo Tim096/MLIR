@@ -13,7 +13,9 @@ that is not already `f8E8M0FNU`:
 Both follow from reading the scale as an exponent. The OCP MXFP spec fixes
 that reading only for the `E8M0` scale of an MX format, and hardware that
 consumes an `f8E5M3` scale uses its mantissa, so the general reading is that
-the input is multiplied or divided by the value of the scale.
+the input is multiplied or divided by the value of the scale. `ArithToAMDGPU`
+already reads it that way in the IR: it casts the scale to `f32` by width and
+passes the value on, with no `f8E8M0FNU` check anywhere in the file.
 
 The truncation is a wrong value rather than a wrong rounding mode. Constant
 folding the IR the expansion emits for the scale gives the divisor it
@@ -30,19 +32,23 @@ The error approaches a factor of two just below a power of two.
 ## Change
 
 Both converters cast the scale to the type the arithmetic happens in and use
-it as it is. For a scale that already is `f8E8M0FNU` that cast is the same
-widening as before, so those expansions are emitted unchanged.
+it as it is, picking the cast that fits the change in width: `arith.extf` and
+`arith.truncf` where the width changes, and `arith.convertf` where it does
+not. For a scale that already is `f8E8M0FNU` and arithmetic wider than eight
+bits, that cast is the same widening as before, so those expansions are
+emitted unchanged.
 
-`arith.extf` and `arith.truncf` each require a strict change in width, so a
-scale as wide as the operand but of a different type has no conversion to
-spell. The previous code did not check for that and built an op that does not
-verify; this reports a match failure instead.
+No cast bridges a scalar scale and a shaped operand, which the op verifier
+permits because `ElementwiseMappable` exempts scalars, and `arith` cannot
+broadcast one. That combination used to build an `arith.extf` that does not
+verify; it is now reported as a match failure.
 
 Eight tests in `expand-ops.mlir` use a scale that is not `f8E8M0FNU` and all
 eight change. Six assert the `arith.truncf ... to f8E8M0FNU` step that is
 gone. Two assert that a `f8E5M2FNUZ` scale fails to legalize, which it no
-longer does, so they become expansion tests. Four are added: an `f8E5M3FNU`
-scale for each op, and the equal-width case each op now rejects.
+longer does, so they become expansion tests. Six are added: an `f8E5M3FNU`
+scale and an equal-width scale for each op, a scale narrower than the
+arithmetic type, and the scalar-scale case each op now rejects.
 
 The op descriptions carry the same truncation in their example lowerings and
 are updated with it.
@@ -57,9 +63,14 @@ scales. @tgymnich read it the other way earlier on #215123 and has not said
 where he stands since, so this is the patch for one of the two answers rather
 than a settled question -- please say so if you still read it as the exponent.
 
-Not in this patch: `ArithToAMDGPU` casts any scale type to `f32` and hands it
-to `amdgpu::PackedScaledTruncOp`. If that instruction reads only the exponent
-bits, that path drops the mantissa under this reading too, but the answer is
-in hardware documentation rather than in the tree, so it is a separate change.
+Not closed by this patch: `ArithToAMDGPU` casts any scale type to `f32` and
+hands it to `amdgpu::PackedScaledTruncOp`, and `ROCDLOps.td` describes every
+`cvt.scalef32` op it becomes as multiplying or dividing by *the exponent part
+of* the scale (16 occurrences, e.g. `:2952`, `:2996`). So under this reading
+the two lowerings disagree on the value of a non-power-of-two scale, and this
+patch widens that gap rather than narrowing it: the generic expansion starts
+using the whole scale while the hardware path keeps using its exponent. Closing
+it is a separate change, and there is more than one reasonable way -- see the
+comments below.
 
 cc @tgymnich @krzysz00 @umangyadav @kuhar

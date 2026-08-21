@@ -29,6 +29,75 @@
 | [#215696](https://github.com/llvm/llvm-project/pull/215696) | 從 #214637 拆出：`ceildivs` INT_MIN 在 fold／兩個 index lowering／affine 展開／inference 全部一致 | ✅ **`kuhar` 2026-08-14 14:58 APPROVED**，但同時說想要第二個 approval，點名 `@krzysz00`（**4 天未回，但他 08-17 在 #215295 是活的**）。head `358a393a`、仍 `clean` | 全綠 |
 | [#216056](https://github.com/llvm/llvm-project/pull/216056) | 🆕 `APFloat::convert` 不回報 sign／zero 失真（含 crash） | ✅ **已 MERGE**（2026-08-17 09:21 UTC，`tgymnich` 代 merge，squash commit `898b0188d901`）。**第五個 commit，也是第一個不在 MLIR 而在 `llvm/lib/Support` 的**。issue #215445 同時自動關閉 | 全綠 |
 
+### 🔬 2026-08-21：派三個 agent，敵意 review 抓到三個真缺陷
+
+本人指示派 agent 協助。因為 **M1 的完成條件已經達標**（4 個實質 patch merged、
+其中 3 個過第 1、2 關），力氣沒有放在「再送幾個 PR」，而是放在**保護已送出的品質**
+＋ **把下一批題目備好**。
+
+| Agent | 任務 | 結果 |
+|---|---|---|
+| A | 對 #217892 做**敵意 review**（明確要求找缺陷，且每條都要實跑驗證） | 3 個真缺陷，其中 1 個打掉核心論證 |
+| B | 掃 `vector` 全部 TODO，過第 1、2 關 ＋ 撞車查證 | 5 個過關候選、10 類刷除理由 → [`notes/vector-patch-candidates.md`](notes/vector-patch-candidates.md) |
+| C | 從 LLVM 樹裡查 `V_CVT_SCALEF32_*` 讀不讀 scale 的尾數 | **樹裡就有答案**，16 處 |
+
+### ⚠️ 2026-08-21：#217892 的核心論證是錯的 —— `arith.convertf` 早就存在
+
+**這是這一輪最該記住的一條。**
+
+我在 `castFloatValue` 裡寫「同寬但不同型的轉換**無法拼寫**，所以 bail」，
+並據此寫了兩個負向測試、以及 commit message 裡一整段論證。
+
+**`arith.convertf` 在 2026-03 就進樹了**（PR #188041，`ArithOps.td:1603`），
+summary 一字不差就是 "cast between floating-point types of the same bitwidth"，
+description 還明講它涵蓋 `extf`／`truncf` 做不到的情況。
+
+**它就在我編輯的那兩段 op description 往下約一百行的位置。**
+
+**錯在哪裡**：我在寫「這個轉換不存在」之前，**沒有去搜樹上有沒有這個轉換**。
+這和 08-21 稍早那次「只驗證一半就寫成全稱」是同一類——
+**對「不存在」的宣稱，成本最低的驗證方式就是 grep 一次。**
+
+自我檢查句再加一條：**「我說某個東西不存在之前，搜過了嗎？」**
+
+### ✅ 2026-08-21：#217892 三個缺陷全部修好並 force-push（head `2b11b90c3675`）
+
+| 缺陷 | 嚴重度 | 處理 |
+|---|---|---|
+| `arith.convertf` 早就存在，bail 的理由是假的 | **致命**（reviewer 三分鐘會發現） | 同寬改成產 `arith.convertf`；兩個測試從負向翻正向 |
+| 純量 scale 配 shaped 運算元**產出過不了 verifier 的 IR**（實跑確認）。既有 bug，但我把舊碼唯一處理 shape 的 `cloneToShapedType` 刪掉了 | 真 bug | 加 shape 檢查 → `notifyMatchFailure`；每個 op 補一個負向測試 |
+| `truncf` 分支**零測試覆蓋**——改成 `failure()`／`ExtFOp`／拿掉 fastmath 測試都不會紅 | 覆蓋漏洞 | 補 f32 scale ＋ `to_nearest_even fastmath<fast>` 測試，同時 pin 住「rounding mode 屬於結果的 cast，不屬於 scale 的 cast」 |
+
+**沒有自己拍板的一條**：「E8M0 scale 逐字不變」在**窄運算型別**下被推翻。
+`arith.scaling_truncf %a, %s : f8E8M0FNU, f8E8M0FNU to f4E2M1FN` 現在展開成
+`arith.divf ... : f8E8M0FNU`（無號、無零的型別裡做除法），**能過 verifier 但撐過
+`-convert-arith-to-llvm` 沒被降下去**；舊碼在同樣輸入產出過不了 verifier 的 `extf`。
+「用 verifier 錯誤換無聲無法 lower 的 IR」不是改善，但真正的問題是
+**這個 op 該不該接受 `f8E8M0FNU` 當運算元型別**——那是 op owner 的決定。
+已在 PR 上點名 `@umangyadav` 問，沒有自己選邊。
+
+驗證：`check-mlir` **3906 passed / 0 failed**、`clang-format` 乾淨。
+留言：[5369893540](https://github.com/llvm/llvm-project/pull/217892#issuecomment-5369893540)（主動承認 `convertf` 是自己漏查）。
+
+> 💡 **`gh pr edit --body-file` 又踩到 projects-classic 的坑**（描述長度沒變 = 沒寫入）。
+> 可用的寫法：`python3` 組 JSON → `gh api -X PATCH repos/.../pulls/<n> --input <file>`。
+> TODO 早就記過這條，這次還是先踩了才想起來。
+
+### 🔎 2026-08-21：`ArithToAMDGPU` 的尾數問題，樹裡就有答案
+
+`mlir/include/mlir/Dialect/LLVMIR/ROCDLOps.td` 對每個 `cvt.scalef32` op 都寫著
+「multiplying／dividing by **the exponent part of** `scale`」——**16 處，全部一致**
+（`:2952` 是 `packed_scaled_trunc` 變成的那個，`:2996` 是 `scaled_ext_packed` 的）。
+且 `ArithToAMDGPU.cpp` 對 scale 型別**零限制**（整檔沒有一個 `E8M0` 字樣，
+對比 `ExpandOps.cpp:682` 會 bail），gating 是 `*maybeChipset == kGfx950`（注意是 `==` 不是 `>=`）。
+
+**這對我自己的 patch 不利，所以更要主動講**：在 `in / scale` 的讀法下，
+generic expansion（改完後用完整的值）與硬體路徑（只用 exponent）**在「值」上分歧**，
+不只是 rounding 不同。**我的 patch 把 #215295 的分歧修好一半、讓另一半變得更大。**
+
+已在 PR 上寫明，並列出兩個收尾方式讓 reviewer 選，沒有自己決定：
+[5369761220](https://github.com/llvm/llvm-project/pull/217892#issuecomment-5369761220)。
+
 ### 📌 2026-08-21：三個都沒人理，各 ping 一次（都帶新資訊）
 
 **先查證不是我們的問題**：
