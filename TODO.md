@@ -9,7 +9,7 @@
 >
 > 新 session 開場建議直接說：「讀 Goal.md 和 TODO.md，然後接續」。
 
-最後更新：2026-08-18
+最後更新：2026-08-21
 
 ---
 
@@ -28,6 +28,108 @@
 | [#215318](https://github.com/llvm/llvm-project/pull/215318) | M1-d：transfer permutation lowering 支援 masked op | ✅ **已 MERGE**（2026-08-13 16:20 UTC，`banach-space` 代 merge，squash commit `1ccdf48548ed`）。**第一個 vector commit** | 全綠 |
 | [#215696](https://github.com/llvm/llvm-project/pull/215696) | 從 #214637 拆出：`ceildivs` INT_MIN 在 fold／兩個 index lowering／affine 展開／inference 全部一致 | ✅ **`kuhar` 2026-08-14 14:58 APPROVED**，但同時說想要第二個 approval，點名 `@krzysz00`（**4 天未回，但他 08-17 在 #215295 是活的**）。head `358a393a`、仍 `clean` | 全綠 |
 | [#216056](https://github.com/llvm/llvm-project/pull/216056) | 🆕 `APFloat::convert` 不回報 sign／zero 失真（含 crash） | ✅ **已 MERGE**（2026-08-17 09:21 UTC，`tgymnich` 代 merge，squash commit `898b0188d901`）。**第五個 commit，也是第一個不在 MLIR 而在 `llvm/lib/Support` 的**。issue #215445 同時自動關閉 | 全綠 |
+
+### 📌 2026-08-21：三個都沒人理，各 ping 一次（都帶新資訊）
+
+**先查證不是我們的問題**：
+
+| | 我方最後發聲 | 對方回應 | CI | mergeable |
+|---|---|---|---|---|
+| #215123 | 08-18 02:28 | 無 | 10 項全 success | `clean` |
+| #215696 | 08-16 16:58 | 無 | 10 項全 success | `clean` |
+| #215295 | 08-18 02:03 | 無 | — | — |
+
+**三個 reviewer 都不是消失，是很活躍**（`gh api users/<u>/events/public`）：
+08-18 起 `krzysz00` 100+、`kuhar` 100+、`tgymnich` 21 個公開事件，最新都在 08-20 深夜。
+純粹是我們排不進優先序。
+
+送出的三則：
+
+| 對象 | 帶的新資訊 | 連結 |
+|---|---|---|
+| #215123 | **premerge 在 rebase 後的 head 已全綠**（上次留言時還在跑） | [5365939241](https://github.com/llvm/llvm-project/pull/215123#issuecomment-5365939241) |
+| #215696 | approve 滿一週、第二人始終沒出現；**把問題丟回 kuhar**「一個 approve 夠不夠，還是有特定人要等」 | [5365939407](https://github.com/llvm/llvm-project/pull/215696#issuecomment-5365939407) |
+| #215295 | 從「請確認」改成**「沒人反對我就開始寫」**，並附上 patch 會動與不會動的範圍 | [5365939570](https://github.com/llvm/llvm-project/issues/215295#issuecomment-5365939570) |
+
+### ⚠️ 2026-08-21：上面那則寫錯一句，已發更正
+
+我寫「every existing test keeps its numbers」——**錯的**。那只對 `f8E8M0FNU` scale 成立，
+而我只驗證了那一半就寫成全稱。實查 `expand-ops.mlir`：**8 個測試的 scale 不是 E8M0，全部會變**。
+
+| 類型 | 測試 |
+|---|---|
+| 6 個會改形狀（現在斷言 `arith.truncf ... to f8E8M0FNU` 那一步） | `scaling_truncf_propagate_rounding_mode_fast_math`、`scaling_truncf_f16_to_f4E2M1FN_using_f16_scales`、`scaling_truncf_vector_f16_to_f4E2M1FN_using_f16_scales`、`scaling_extf_to_f32_using_f16_scales`、`scaling_extf_vector_to_f32_using_f16_scales`、`scaling_extf_vector_to_f32_using_f16_scales_fastmath` |
+| 2 個會反轉（現在斷言 `f8E5M2FNUZ` scale 無法 legalize） | `invalid_scaling_truncf_to_f4E2M1FN`、`invalid_scaling_extf_to_f32` |
+
+更正留言：[5365951028](https://github.com/llvm/llvm-project/issues/215295#issuecomment-5365951028)。
+
+**這 6 個測試等於是樹上對 exponent-only 讀法的白紙黑字**，所以更該等 tgymnich 表態再送。
+
+**教訓（已符合既有記憶 `match-upstream-style-not-my-own`）**：
+只驗證了一半就寫成全稱，正是 kuhar 08-14 抓過的同一類錯。
+自我檢查句要多一條：**「我實際跑過的範圍，等於我寫的範圍嗎？」**
+
+### ❌ 2026-08-21：舊 M1-c（`vector.extract` dynamic position）評估後放棄
+
+撞車查證乾淨（最接近的 #115808、#171198 都停在 2026-03-26），**但兩個前提都被推翻**：
+
+**① 筆記寫的「四處是同一個缺口」是錯的**——今天的 main 有 **10 處**，分屬 **5 個不同 folder**，
+而且能不能做動態位置**逐個不同**：
+
+| folder | 行號 | 動態位置可行性 |
+|---|---|---|
+| `foldExtractOpFromExtractChain` | 1478、1488 | **可以**，純串接位置，不需算術 |
+| `ExtractFromInsertTransposeChainState` | 1617/1633/1651/1675/1694 | 大多不行（要比對位置相等），除非同一個 SSA value |
+| `foldExtractFromShapeCast` | 1885 | 要算 linear index → 要建 `muli`/`addi`，`fold()` 建不了 op |
+| `foldExtractFromExtractStrided` | 1950 | 同上，要加 offset |
+| `foldExtractStridedOpFromInsertChain` | 2002 | 同上 |
+
+所以「一次補掉是有份量的 patch」不成立，真正乾淨可做的只有第一個。
+
+**② 第一關證據不足**：`mlir/test/Integration/` 裡動態位置的 `vector.extract` 只有 23 處，
+落在 `sparse-dot-product`、`ArmSME/vector-load-store`、`Vulkan/vector-shuffle`——
+**不是 AI pipeline 的必經之路**。第二關（JD 關鍵字）也照舊弱。
+
+**判定：不做。** 保留紀錄是為了下次別再從那句過期的「四處」重新起念。
+
+### 🔧 2026-08-21：開始寫 `in / scale` 的 patch（分支 `arith-scaling-value-semantics`）
+
+基準 `fb7a3412079f`。**寫沒有被擋，只有送要等 tgymnich**——這是我在 issue 上公開講的分寸。
+
+改法：兩個 converter 都不再把 scale 截成 `f8E8M0FNU`，改成把 scale **casting 到運算發生的型別**
+（`scaling_extf` → result type、`scaling_truncf` → input type），然後照舊 `mulf`／`divf`。
+
+抽出 `castFloatValue` helper，並處理一個**今天的程式碼沒處理的邊界**：
+`arith.extf`／`arith.truncf` 的 verifier 都要求嚴格變寬／變窄，所以**同寬但不同型**
+（例如 8 bit 的 `f8E5M3FNU` scale 配 8 bit 的 result）兩個都不合法，必須明確 `notifyMatchFailure`。
+今天的程式碼在這個組合下會建出過不了 verifier 的 op。
+
+**已完成（commit `dade85d185b4`，3 個檔案）**：
+
+| 檔案 | 動了什麼 |
+|---|---|
+| `ExpandOps.cpp` | 兩個 converter 改用 scale 的值；新增 `castFloatValue` helper |
+| `ArithOps.td` | 兩段 description 原本就寫著舊讀法，一併改；順手修掉原本錯亂的 SSA 編號（`%0` 定義後卻用 `%1`） |
+| `expand-ops.mlir` | 6 改形狀、2 負向翻正向、新增 4（`f8E5M3FNU` 正向 ×2、同寬 bail 負向 ×2） |
+
+**驗證**：`expand-ops.mlir` PASS、`git clang-format HEAD~1` 乾淨、
+三個代表案例實跑輸出正確（f16 不再截斷／`f8E5M3FNU` 開始展開／E8M0 逐字不變）、
+**`check-mlir` 3905 passed / 0 failed**（613 unsupported、1 expectedly failed）。
+
+**第 4 關證據**（`notes/scaling-value-semantics.md` §10，可重現）：把舊展開那串 IR
+餵給 `-canonicalize` 折出實際除數 —— scale `3.0`→**2.0**、`1.6`→**1.0**、`7.0`→**4.0**，
+誤差上界趨近 2×。
+
+> ⚠️ **TODO 舊紀錄已過期**：08-10 記的「`1.6 : f16` → ExpandOps 給 2.0」今天不成立。
+> 實測只跑 `-canonicalize` 是**不折**（`losesInfo` 為真，正是我們自己 #214919/#216056 的效果），
+> 開 `include-f8e8m0` 才折成 1.0。**要引數字就重跑，不要抄舊紀錄。**
+
+**第 5 步撞車查證**：`#216653`（`arun-thmn`，今天還在動）同樣改 `ExpandOps.cpp` ＋ `expand-ops.mlir`，
+但**只碰 pass 註冊區**（`includeF8E8M0` 那幾行）加 F8E4M3FN/F8E5M2 的 pattern，
+**不碰 scaling converter**。語意不撞，同檔不同區域，誰後 merge 誰 rebase。
+
+**狀態：停在本地，不送。** 等 `tgymnich` 在 #215295 表態。
+分支 `arith-scaling-value-semantics`，答辯筆記 [`notes/scaling-value-semantics.md`](notes/scaling-value-semantics.md)。
 
 ### ✅ 2026-08-18：#215295 已回覆 krzysz00，並請 tgymnich 表態
 
