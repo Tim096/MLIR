@@ -15,7 +15,7 @@
 
 ## 一句話現況
 
-**五個 commit 已進 upstream。剩兩個 open PR，兩個都已經被 approve，卡在沒人按 merge。**
+**五個 commit 已進 upstream。三個 open PR：兩個已 approve 等人按 merge，一個 2026-08-21 新送。**
 **#215123 tgymnich 08-17 approve（要求 rebase，已做）、#215696 kuhar 08-14 approve 等第二個人。**
 **⚠️ 新原則：已 approve 未 merge 就禮貌 ping 一次提醒（2026-08-17 本人指示，已記進長期記憶）。**
 
@@ -128,8 +128,25 @@
 但**只碰 pass 註冊區**（`includeF8E8M0` 那幾行）加 F8E4M3FN/F8E5M2 的 pattern，
 **不碰 scaling converter**。語意不撞，同檔不同區域，誰後 merge 誰 rebase。
 
-**狀態：停在本地，不送。** 等 `tgymnich` 在 #215295 表態。
-分支 `arith-scaling-value-semantics`，答辯筆記 [`notes/scaling-value-semantics.md`](notes/scaling-value-semantics.md)。
+**已送出：[PR #217892](https://github.com/llvm/llvm-project/pull/217892)**
+（2026-08-21，head `bf5128a96ff8`，base `4f5aa5128922`）。
+分支 `arith-scaling-value-semantics`，答辯筆記
+[`notes/scaling-value-semantics.md`](notes/scaling-value-semantics.md)、
+描述存檔 [`patches/scaling-value-semantics-pr-body.md`](patches/scaling-value-semantics-pr-body.md)。
+
+**送出前重做的兩件事**：
+① rebase 到 `4f5aa5128922` 並重測（main 從 `fb7a3412` 前進過，不重測等於沒驗證）——
+`expand-ops.mlir` ＋ `canonicalize.mlir` 都 PASS；
+② **commit 訊息重寫**——取樣 `git log -- mlir/lib/Dialect/Arith/` 後發現上游的形狀是
+**問題 → 具體 IR 例子（```mlir fence）→ 數字 → `## Change`**，原本那則是純散文沒有例子，不合。
+
+**描述刻意寫進去的三件事**（因為 tgymnich 始終沒表態）：
+- 連到 #215295，並寫明「這是兩個答案中的一個，不是已定案的問題」
+- 直接對 tgymnich 說：**還是讀成 exponent 就講，我關掉 PR** ——
+  比讓他 review 一個前提錯的 patch 便宜
+- 把 `ArithToAMDGPU` 明確劃到本 patch 之外（那題的答案在硬體文件 §15.14，不在樹裡）
+
+同時在 #215295 貼了指過去的留言：[5369626828](https://github.com/llvm/llvm-project/issues/215295#issuecomment-5369626828)。
 
 ### ✅ 2026-08-18：#215295 已回覆 krzysz00，並請 tgymnich 表態
 
