@@ -5,11 +5,11 @@
 
 ## 結論先看
 
-我目前向 LLVM 官方專案提出過 **14 個程式碼修改**：
+我目前向 LLVM 官方專案提出過 **17 個程式碼修改**：
 
 - **6 個已正式合併**，成為 LLVM／MLIR 的一部分。
 - **2 個已通過 maintainer review**，測試也全部通過，正在等待合併。
-- **6 個正在 review**：一個處理不同硬體轉換路徑對 MXFP scale 的解讀分歧，一個補上 2-bit 量化的向量截斷重寫，一個修正向量化時把會越界的讀寫標成安全的判斷，一個修正 GPU tensor core 的 matmul 後面接減法或取負時編譯器直接崩潰的問題，一個修正向量化器把 tensor 切片寫到錯誤位置的問題，一個修正混合精度矩陣乘法折疊產生不合法 IR 的問題。
+- **9 個正在 review**：一個處理不同硬體轉換路徑對 MXFP scale 的解讀分歧，一個補上 2-bit 量化的向量截斷重寫，一個修正向量化時把會越界的讀寫標成安全的判斷，一個修正 GPU tensor core 的 matmul 後面接減法或取負時編譯器直接崩潰的問題，一個修正向量化器把 tensor 切片寫到錯誤位置的問題，一個修正混合精度矩陣乘法折疊產生不合法 IR 的問題，一個修正帶 mask 的向量讀寫經過迴圈展開後產生不合法 IR 的問題，兩個修正 GPU 記憶體存取改寫時遺失對齊與快取提示的問題。
 - 另外提出過 **2 個技術問題報告**；其中 1 個已由我自己修好並合併。
 
 這些工作主要處理 AI compiler 在量化、向量運算和數值轉換時可能遇到的錯誤，包括：
@@ -25,7 +25,7 @@
 |---|---:|---|
 | 已合併進 LLVM | **6** | FP8、MXFP 常數最佳化、整數邊界、Vector mask、LLVM 浮點核心 |
 | 已通過 review | **2** | 跨後端整數正確性、GPU MMA 轉置 store |
-| Review 中 | **6** | MXFP scale 語意統一、2-bit 向量截斷、向量化 in_bounds 越界判斷、tensor core elementwise epilogue 崩潰、insert_slice 向量化寫錯位置、混合精度 contract 折疊 |
+| Review 中 | **9** | MXFP scale 語意統一、2-bit 向量截斷、向量化 in_bounds 越界判斷、tensor core elementwise epilogue 崩潰、insert_slice 向量化寫錯位置、混合精度 contract 折疊、帶 mask 的向量讀寫展開、AMDGPU／GPU 記憶體存取屬性保留 |
 | 技術 Issue | **2** | 浮點 crash、MXFP 不同 lowering 結果不一致 |
 
 ## 已正式合併的 6 項貢獻
@@ -119,7 +119,7 @@ AI compiler 常用 mask 表示「只處理向量中的部分元素」，例如�
 
 這表示同一份模型或程式，可能因選擇不同 backend 而得到不同答案。我把 Index、Affine、LLVM、SPIR-V 與數值範圍分析的相關實作統一成相同的正確演算法。
 
-## 正在 review 的 6 項貢獻
+## 正在 review 的 9 項貢獻
 
 ### 8. 同一個 MXFP 操作經過不同 lowering，可能算出不同答案
 
@@ -199,6 +199,36 @@ MLIR 有一個最佳化會把矩陣乘法兩個輸入上的型別擴展（例如
 
 我補上一個來源型別的比較，不一致就不折疊、保留原本的擴展。比較的粒度對齊 `vector.contract` verifier 的實際要求（只要求 element type 相同，形狀與 scalable 可以不同），所以既有能折疊的案例全部保留。驗證包含兩個新的負向 lit 測試與完整的 MLIR 測試套件。
 
+### 15. 修正帶 mask 的向量讀寫經過迴圈展開後產生不合法 IR 的問題
+
+- [PR #221307](https://github.com/llvm/llvm-project/pull/221307)
+- 狀態：**已送出，review 中**（2026-09-05）
+- 修改範圍：MLIR VectorToSCF conversion（vectorization、masking）
+
+MLIR 把多維向量讀寫降成迴圈的轉換，沒有檢查這個讀寫是不是被 `vector.mask` 包住。`vector.mask` 的區塊只允許放一個操作，轉換卻把展開後的緩衝區、迴圈和低維讀寫全部塞進去，verifier 直接拒絕，整個 pass 失敗；而且展開出來的讀寫完全沒帶 mask。五條轉換路徑（漸進式、完全展開、一維、scalable 轉置、tensor）都重現。
+
+正確的順序是先把 `vector.mask` 降成讀寫本身的 mask operand，再做迴圈展開，MLIR 內建的整合測試都是這樣排的。我讓五個 pattern 在遇到被 mask 包住的讀寫時明確拒絕，交給前一個步驟處理，和 MLIR 一週前處理另一個類似前置條件的方式一致。驗證包含四個新的負向 lit 測試（三種 pass 設定都比對）與完整的 MLIR 測試套件。
+
+### 16. 修正 AMDGPU 遮罩讀取改寫時遺失對齊資訊的問題
+
+- [PR #221308](https://github.com/llvm/llvm-project/pull/221308)
+- 狀態：**已送出，review 中**（2026-09-05）
+- 修改範圍：MLIR AMDGPU dialect transforms（GPU memory access）
+
+AMDGPU 有一個轉換會把帶 mask 的向量讀寫改成一般讀寫加條件判斷，讓硬體走較快的路徑。這個轉換比讀寫操作的 `alignment` 屬性早一個月寫成，重建操作時沒有把對齊資訊帶過去，最後產生的 LLVM 讀取只能退回元素大小的對齊（f16 向量從 16 bytes 退到 2 bytes），失去原本能用的較寬存取。這是效能損失，不影響結果正確性。
+
+改寫前後存取的位址與寬度完全相同，所以對齊資訊可以直接轉傳。我透過 builder 把它帶過去，寫法與 MLIR 其他轉換一致。驗證包含三個新的 lit 測試（每個重建點各一個）與 LLVM 層輸出的對照。
+
+### 17. 修正 GPU 記憶體存取分解時遺失快取與對齊提示的問題
+
+- [PR #221312](https://github.com/llvm/llvm-project/pull/221312)
+- 狀態：**已送出，review 中**（2026-09-05）
+- 修改範圍：MLIR GPU dialect transforms（memory access lowering）
+
+GPU dialect 有一個轉換把 kernel 裡的多維記憶體存取改成「算出線性位址、再做零維存取」，給只支援裸指標的目標（例如 SPIR-V）使用。重建存取時只傳了新的記憶體參考，`nontemporal`（不要留在快取）、`alignment`（對齊）與較新的 `invariant`（kernel 期間不會改變）三個提示全部遺失，後端因此少掉對應的最佳化資訊。
+
+存取的元素與型別在改寫前後相同，三個提示都仍然成立。手寫的 builder 沒有 `invariant` 參數，我改用能帶齊三個屬性的 builder。驗證包含兩個新的 lit 測試與完整的 MLIR 測試套件。
+
 ## 這些成果證明了什麼能力
 
 ### AI compiler 與數值正確性
@@ -248,7 +278,7 @@ MLIR 有一個最佳化會把矩陣乘法兩個輸入上的型別擴展（例如
 
 1. 推動兩個已 approve 的 PR（#215696、#221248）合併，讓正式 upstream 貢獻由 6 個增加到 8 個。
 2. 完成 #217892 的 review，並接著送出 AMDGPU 硬體路徑的對應修正。
-3. 推進 #221185、#221268、#221288、#221293 與 #221298 的 review。第二次掃描（GPU 轉換層＋Linalg 向量化）的結果在 `notes/gpu-linalg-patch-candidates.md`，下一題是 SPIR-V compute 路徑的轉置 MMA。
+3. 推進 #221185、#221268、#221288、#221293、#221298、#221307、#221308 與 #221312 的 review。第二次掃描（GPU 轉換層＋Linalg 向量化）的結果在 `notes/gpu-linalg-patch-candidates.md`，剩下的候選是 `linalg.pack` 分解的 padding 支援。
 4. 把目前用過的枚舉與語意驗證方法整理成自動化工具，用來系統性尋找更多 compiler correctness bug。
 
 ## 一句話總結

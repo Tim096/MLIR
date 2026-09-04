@@ -1,0 +1,1 @@
+@krzysz00 @Groverkss @kuhar the maskedload-to-load patterns predate the `alignment` attribute on `vector.maskedload`/`maskedstore`, so the rewritten `vector.load`/`vector.store` lose it and drop back to the element alignment. This forwards it; the access itself is unchanged. Would you mind taking a look when you have a moment? Thanks.

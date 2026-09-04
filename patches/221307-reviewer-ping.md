@@ -1,0 +1,1 @@
+@banach-space @dcaballe @matthias-springer this follows the same shape as #216947: the transfer patterns in `convert-vector-to-scf` never check for an enclosing `vector.mask`, so the unpacked ops end up in the mask region and the verifier rejects the result. Would you mind taking a look when you have a moment? Thanks.

@@ -15,7 +15,7 @@
 
 ## 一句話現況
 
-**六個 commit 已進 upstream（#215123 09-04 中午 merge）。八個 open PR：#215696 與 #221248 已 approve 等人按 merge，#217892 在 review，#221185（i2 trunci）09-04 送、#221268（`in_bounds` 要看索引）、#221288（WMMA elementwise 降 NVVM 崩潰）、#221293（`insert_slice` 向量化前置條件）與 #221298（ext 折進 `vector.contract` 要同來源型別）09-05 送。**
+**六個 commit 已進 upstream（#215123 09-04 中午 merge）。十一個 open PR：#215696 與 #221248 已 approve 等人按 merge，#217892 在 review，#221185（i2 trunci）09-04 送、#221268（`in_bounds` 要看索引）、#221288（WMMA elementwise 降 NVVM 崩潰）、#221293（`insert_slice` 向量化前置條件）、#221298（ext 折進 `vector.contract` 要同來源型別）、#221307（`convert-vector-to-scf` 拒收 `vector.mask` 裡的 transfer op）、#221308（AMDGPU maskedload 保留 `alignment`）與 #221312（`gpu-decompose-memrefs` 保留 load／store 屬性）09-05 送。**
 **08-21 → 09-04 兩週三個 PR 都沒人回，09-04 全部 rebase 到當天 main、回掉 krzysz00 的 nit，再各 ping 一次；#215123 當天就進了，#221248 送出當天就被 approve。**
 **⚠️ 原則不變：已 approve 未 merge 就禮貌 ping，每次都要帶新資訊。**
 
@@ -35,6 +35,25 @@
 | [#221288](https://github.com/llvm/llvm-project/pull/221288) | M2-d：`gpu.subgroup_mma_elementwise` 降 NVVM——15 種運算 10 種 `llvm_unreachable`，補 8 種、依 PTX ISA 拒收 `extf`／`truncf`、擋 packed fragment（第二個 GPU codegen patch） | 🆕 **2026-09-05 送出**，head `704d5b9c54b2`（base `c7ba46e37d78`），4 個檔案 +233/−12。自動指派 `fabianmcg`；留言（5543974824）另點名 `grypp`、`kuhar`、`simpel01`（#182499 作者） | 全綠 |
 | [#221293](https://github.com/llvm/llvm-project/pull/221293) | L-1：`tensor.insert_slice` 向量化——前置條件沒查 stride 與 rank-reducing 丟掉哪一維，strided／中間維度的 insert 被寫到錯的位置；加兩個 bail（第一個 Linalg patch） | 🆕 **2026-09-05 送出**，head `ae1f85cbb9d0`（base `08d499665a14`），3 個檔案 +88/−4。CODEOWNERS 自動指派 `banach-space`、`nicolasvasilache`、`dcaballe`、`Groverkss`；留言（5544240776）點名 `banach-space`（#122927 作者）、`hanhanW` | Linux／Windows 過，AArch64 跑中 |
 | [#221298](https://github.com/llvm/llvm-project/pull/221298) | V-1：`FoldArithExtIntoContractionOp` 只查兩邊都是 ext、沒查來源型別，`extsi i8`＋`extsi i16`（或 `extf f16`＋`bf16`）折出過不了 verifier 的 `vector.contract`；補一個來源 element type 比較（第三個 vector patch） | 🆕 **2026-09-05 送出**，head `922af2916947`（base `f6a369fa4a57`），2 個檔案 +55/−0。CODEOWNERS 自動指派 `banach-space`、`nicolasvasilache`、`dcaballe`；留言（5544373520）點名 `raikonenfnu`（#96593 作者）、`banach-space`、`dcaballe` | 跑中 |
+| [#221307](https://github.com/llvm/llvm-project/pull/221307) | VS-1：`convert-vector-to-scf` 的五個 transfer pattern 沒查自己是不是在 `vector.mask` 裡，展開的 loop／buffer 全塞進 mask region，`'vector.mask' op expects only one operation to mask`；每個 pattern 入口加 `isMasked()` 拒收（第二個 VectorToSCF patch） | 🆕 **2026-09-05 送出**，head `af0e5de00d82`（base `f6a369fa4a57`），2 個檔案 +87/−0。CODEOWNERS 自動指派 `matthias-springer`、`banach-space`、`nicolasvasilache`、`dcaballe`；留言（5544686298）點名 `banach-space`、`dcaballe`、`matthias-springer` | 跑中 |
+| [#221308](https://github.com/llvm/llvm-project/pull/221308) | GPU-4：`amdgpu-maskedload-to-load` 重建 `vector.load`／`store` 時丟掉 `alignment`，LLVM 層退回 element 對齊（f16 從 `align 16` 變 `align 2`）；透過 builder 轉傳（第一個 AMDGPU patch，效能不是正確性） | 🆕 **2026-09-05 送出**，head `8378fb4c6fbd`（base `f6a369fa4a57`），2 個檔案 +48/−2。自動指派 `krzysz00`、`kuhar`；留言（5544719647）點名 `krzysz00`、`Groverkss`、`kuhar` | 跑中 |
+| [#221312](https://github.com/llvm/llvm-project/pull/221312) | GPU-3：`gpu-decompose-memrefs` 重建 `memref.load`／`store` 時丟掉 `nontemporal`／`alignment`／`invariant`；改用帶三個屬性的 builder（第三個 GPU dialect patch） | 🆕 **2026-09-05 送出**，head `292a8a8cb25a`（base `f6a369fa4a57`），2 個檔案 +60/−2。自動指派 `fabianmcg`；留言（5544811835）點名 `Hardcode84`（pass 作者）、`kuhar`、`krzysz00` | 跑中 |
+
+### 🔧 2026-09-05：第十～十二個 open PR——平行送三題（分支 `vector-to-scf-decline-masked`、`amdgpu-maskedload-keep-alignment`、`gpu-decompose-memrefs-keep-attrs`）
+
+本人要求「能平行就平行」。做法：兩個 agent 各自只讀 tree、出 diff ＋ 測試 ＋ commit message 草稿（GPU-3、GPU-4），我同時查 GPU-2 與上次掃描標「域外」的 VectorToSCF 題；建置與驗證在同一個 build 目錄串行做，三個分支都從 `f6a369fa4a57` 開。
+
+**GPU-2 查證後不是 bug，刷掉。** `OpCooperativeMatrixMulAddKHR` 本來就沒有 layout 參數，SPIR-V 的 layout 在 load／store 就消費掉；`a_transpose` 只是描述「operand 用 transpose 載入」，NVVM 需要它是因為 PTX 的 `wmma.mma` 要重述 fragment layout。SPIR-V 丟掉是對的。
+
+**VS-1（#221307）**：`convert-vector-to-scf` 對 `vector.mask { vector.transfer_read/write }` 五條路徑（progressive、full-unroll、1-D、scalable transpose、tensor）全部把展開的 `memref.alloca`／`scf.for`／低階 transfer op 塞進 mask region，verifier 失敗；而且拆出來的 transfer op 一個 mask 都沒帶（`getMask()` 只看 operand）。先跑 `-lower-vector-mask` 就正常，in-tree 整合測試也都是這個順序。修法是五個 pattern 入口 `isMasked()` 就 `notifyMatchFailure`，與上週 alepot55 的 #216947（allocation scope 檢查）同款。四個負向測試、三個 RUN 前綴都比。check-mlir 4588 個／16 失敗與基準同一組。筆記 [`notes/vector-to-scf-decline-masked.md`](notes/vector-to-scf-decline-masked.md)。
+
+**GPU-4（#221308）**：pass 比 `alignment` 屬性早一個月（2025-07 vs 2025-08），三個重建點只傳 base／indices。存取位址與寬度沒變，所以直接 `/*nontemporal=*/false, getMaybeAlign()` 轉傳（`AffineToStandard` 同款）。LLVM 層 `align 2` → `align 16`。in-tree 只有它自己的 lit 用這個 pass，使用者是 IREE。筆記 [`notes/amdgpu-maskedload-keep-alignment.md`](notes/amdgpu-maskedload-keep-alignment.md)。
+
+**GPU-3（#221312）**：同型問題，`memref.load` 三個屬性、`store` 兩個屬性全掉；手寫 builder 沒有 `invariant`，改用 TableGen 生的 attr 版 builder。#217274 之後 `memref.load` 是 strict property assembly，測試要寫 `alignment(16) nontemporal(true) invariant(true)`。check-mlir 4588／16 同基準。筆記 [`notes/gpu-decompose-memrefs-keep-attrs.md`](notes/gpu-decompose-memrefs-keep-attrs.md)。
+
+**已送出：[#221307](https://github.com/llvm/llvm-project/pull/221307)、[#221308](https://github.com/llvm/llvm-project/pull/221308)、[#221312](https://github.com/llvm/llvm-project/pull/221312)。十一個 open PR。**
+
+**下一題**：候選清單剩 L-2（`DecomposeOuterUnitDimsPackOpPattern` 的 padding bail，中等設計風險，先 @ #218141 作者）與 V-2（價值最低）；`ElideReinterpretCast.cpp:622` 有 GPU-3 同款的屬性丟失可另開。
 
 ### 🔧 2026-09-05：第九個 open PR——ext 折進 `vector.contract` 要同來源型別（分支 `vector-fold-ext-contract-same-type`）
 
@@ -48,7 +67,7 @@
 
 **已送出：[PR #221298](https://github.com/llvm/llvm-project/pull/221298)。第九個 open PR，8 行程式 ＋ 47 行測試。**
 
-**下一題**：GPU-2（SPIR-V 靜默丟掉 `subgroup_mma_compute` 的 `a_transpose`／`b_transpose`）。
+**下一題**：~~GPU-2~~ → 查證後不是 bug（見上一節），改送 VS-1／GPU-3／GPU-4。
 
 ### 🔧 2026-09-05：第八個 open PR——`insert_slice` 向量化的前置條件（分支 `linalg-insert-slice-vectorize-precondition`）
 
@@ -1576,11 +1595,11 @@ CHECK 反映改動前行為；第二個 commit 才是修正 + CHECK 的 diff。
 
 見下面「⭐ 題目清單」的 **M1-b**。
 
-### 5. 2026-09-05 現況：等八個 open PR
+### 5. 2026-09-05 現況：等十一個 open PR
 
 - 等 merge：#215696（kuhar approve，第二人未出現）、#221248（mplatings approve）。**已 approve 未 merge 就禮貌 ping，要帶新資訊。**
 - 等 review：#217892（krzysz00）、#221185（dcaballe）、#221268（banach-space／dcaballe／FedericoBruzzone）、#221288（fabianmcg／grypp）、#221293（banach-space／hanhanW）、#221298（raikonenfnu／banach-space／dcaballe）。09-05 實查前七個都沒有新 review。
-- 第二次掃描已做完 → `notes/gpu-linalg-patch-candidates.md`；GPU-1 已送出為 #221288，L-1 已送出為 #221293，V-1 已送出為 #221298。**下一題：GPU-2（SPIR-V compute 轉置屬性）。**
+- 第二次掃描已做完 → `notes/gpu-linalg-patch-candidates.md`；GPU-1 已送出為 #221288，L-1 已送出為 #221293，V-1 已送出為 #221298，VS-1（VectorToSCF 的 `vector.mask`）為 #221307，GPU-4 為 #221308，GPU-3 為 #221312；GPU-2 查證後不是 bug。**剩 L-2（設計風險）、V-2（價值低），先等 review。**
 
 ---
 

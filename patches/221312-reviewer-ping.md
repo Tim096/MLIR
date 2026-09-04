@@ -1,0 +1,1 @@
+@Hardcode84 @kuhar @krzysz00 the flatten patterns in `gpu-decompose-memrefs` rebuild `memref.load`/`memref.store` from the flattened memref only, so `nontemporal`, `alignment` and the newer `invariant` are lost. This forwards them; the accessed element is unchanged. Would you mind taking a look when you have a moment? Thanks.

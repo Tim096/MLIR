@@ -54,7 +54,11 @@ SPIR-V 側 12 種都有。`extf`／`truncf` 依 PTX ISA 不可能做（f16↔f32
 
 做法：加一個型別比較 `notifyMatchFailure`，1 檔 ＋ 1 lit，~12 行。**適合當 #221288 review 期間的填充 PR。**
 
-### GPU-2. SPIR-V 靜默丟掉 `subgroup_mma_compute` 的 `a_transpose`／`b_transpose`
+### GPU-2. SPIR-V 靜默丟掉 `subgroup_mma_compute` 的 `a_transpose`／`b_transpose` → ❌ 2026-09-05 查證後不是 bug
+
+> `OpCooperativeMatrixMulAddKHR` 本來就沒有 layout 參數（`SPIRVCooperativeMatrixOps.td` 只有 load／store 帶 `matrix_layout`），layout 在 load 時就消費掉，matrix 物件本身無 layout。
+> `a_transpose` 的文件也說它只是「描述 operand 是用 transpose 載入的」，NVVM 需要它是因為 PTX 的 `wmma.mma` 要重述 fragment layout。SPIR-V 側丟掉是對的，不能送。
+
 
 `GPUToSPIRV/WmmaOpsToSPIRV.cpp:397-430`。NVVM 側用它選 intrinsic（`WmmaOpsToNvvm.cpp:256`），SPIR-V 側整個 pattern 沒讀它，load／store 卻有處理 `transpose`。
 `SPV_KHR_cooperative_matrix` 的 operands 沒有 transpose 位，所以正確做法是 `notifyMatchFailure` 拒收。
@@ -66,7 +70,7 @@ SPIR-V 側 12 種都有。`extf`／`truncf` 依 PTX ISA 不可能做（f16↔f32
 `Linalg/Transforms/Transforms.cpp:1175`。FIXME 是 #218141（prometheusfma-llvm，08-25）把 assertion crash 換成 bail 時留的，明寫「應該支援」。負向測試 `decompose-pack.mlir:365` 現成。
 ② tensor layout ＋ tiling；⑤ 乾淨，但**先 @ #218141 作者**。中等設計風險（padded pack 的 `tensor.pad` high pad 怎麼算）。~40-60 行。
 
-### GPU-3／GPU-4. 兩個「重建 op 時丟屬性」的小題
+### GPU-3／GPU-4. 兩個「重建 op 時丟屬性」的小題 → ✅ 已送出：GPU-4 [#221308](https://github.com/llvm/llvm-project/pull/221308)、GPU-3 [#221312](https://github.com/llvm/llvm-project/pull/221312)（2026-09-05）
 
 - `GPU/Transforms/DecomposeMemRefs.cpp:145`／`:168`：`memref.load`／`store` 的 `nontemporal`／`alignment`／`invariant` 丟掉。
 - `AMDGPU/Transforms/MaskedloadToLoad.cpp:56`／`:227`：`vector.maskedload`／`maskedstore` 的 `alignment` 丟掉（實測只是變保守，**不是錯誤**）。
@@ -86,4 +90,4 @@ SPIR-V 側 12 種都有。`extf`／`truncf` 依 PTX ISA 不可能做（f16↔f32
 **設計題不是小 patch**：`VectorToGPU.cpp:545` 抽象 layout、`:92` `fpExtend/fpTruncSupportsMMAMatrixType` 無條件 true、`NVGPUToNVVM.cpp:373`／`:606` satfinite 屬性、`DataLayoutPropagation.cpp` 各 TODO、`LowerVectorContract.cpp:640`／`:783` mask 支援、`VectorDropLeadUnitDim.cpp:229`／`:283`（剛 revert 過一輪）。
 **撞車**：`VectorToGPU.cpp:354` 與 #218226 同區；XeGPU 全部。
 **第 1 關失敗**：`PackAndUnpackPatterns.cpp:135` `isPackOnInnerMostDim` 缺 `hasStaticShape()`（只有 test/lib 呼叫）。
-**域外**：`-convert-vector-to-scf` 對 `vector.mask` 包的 `transfer_write` 報 `expects only one operation to mask`——是 VectorToSCF 的缺陷，`LowerVectorTransfer.cpp:264` 的 TODO 只是伴生現象，之後可以另開一題。
+**域外**：`-convert-vector-to-scf` 對 `vector.mask` 包的 `transfer_write` 報 `expects only one operation to mask`——是 VectorToSCF 的缺陷，`LowerVectorTransfer.cpp:264` 的 TODO 只是伴生現象，之後可以另開一題。 → ✅ 2026-09-05 開了，分支 `vector-to-scf-decline-masked`，筆記 `notes/vector-to-scf-decline-masked.md`。
