@@ -64,6 +64,9 @@ MMA 的 **load** 路徑會算 `isTranspose` 並發出 `subgroup_mma_load_matrix 
 
 ## 🥉 3. `in_bounds` 沒看 indices 就算出來
 
+> ✅ **2026-09-05 已送出 [#221268](https://github.com/llvm/llvm-project/pull/221268)**（分支 `affine-vectorize-in-bounds-index`，筆記 `notes/vector-in-bounds-indices.md`）。
+> 動手時發現不是清 FIXME 而是可重現的錯誤：`%A[%i + 1]`／`4 to 16` 會標 `in_bounds = true` 卻超界。#215340 的 pass 只把 `false` 變 `true`，不重疊，沒去留言協調。
+
 `mlir/lib/Dialect/Vector/Utils/VectorUtils.cpp:479`、`:484`（write 端 `:547`、`:552`）
 
 `useInBoundsInsteadOfMasking` 時，`in_bounds` 純粹從 shape 推：

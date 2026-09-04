@@ -1,0 +1,1 @@
+@FedericoBruzzone @banach-space @dcaballe this tightens the `in_bounds` inference from #201180 / #202766 so it also looks at the index; the offset and unaligned-lower-bound cases in the description keep `in_bounds = [true]` today. It does not overlap with #215340, which only turns `false` into `true`. Would you mind taking a look when you have a moment? Thanks.

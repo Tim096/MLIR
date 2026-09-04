@@ -9,14 +9,14 @@
 >
 > 新 session 開場建議直接說：「讀 Goal.md 和 TODO.md，然後接續」。
 
-最後更新：2026-09-04
+最後更新：2026-09-05
 
 ---
 
 ## 一句話現況
 
-**五個 commit 已進 upstream。五個 open PR：兩個已 approve 等人按 merge，#217892 在 review，#221185（i2 trunci）與 #221248（VectorToGPU 轉置 store）09-04 新送。**
-**08-21 → 09-04 兩週三個 PR 都沒人回，09-04 全部 rebase 到當天 main、回掉 krzysz00 的 nit，再各 ping 一次。**
+**六個 commit 已進 upstream（#215123 09-04 中午 merge）。五個 open PR：#215696 與 #221248 已 approve 等人按 merge，#217892 在 review，#221185（i2 trunci）09-04 送、#221268（`in_bounds` 要看索引）09-05 送。**
+**08-21 → 09-04 兩週三個 PR 都沒人回，09-04 全部 rebase 到當天 main、回掉 krzysz00 的 nit，再各 ping 一次；#215123 當天就進了，#221248 送出當天就被 approve。**
 **⚠️ 原則不變：已 approve 未 merge 就禮貌 ping，每次都要帶新資訊。**
 
 | PR | 內容 | 狀態（2026-09-04 實查） | CI |
@@ -24,13 +24,42 @@
 | [#214622](https://github.com/llvm/llvm-project/pull/214622) | M0：`AtomicRMWKind` switch 窮盡（NFC） | ✅ **已 MERGE**（2026-08-09 15:03，merge commit `78e17e70bd52`） | — |
 | [#214919](https://github.com/llvm/llvm-project/pull/214919) | M1-b0：`f8E8M0FNU` NaN 被折成 Inf | ✅ **已 MERGE**（2026-08-10 11:09 UTC，merge commit `794aa0fd923a`） | 全綠 |
 | [#214637](https://github.com/llvm/llvm-project/pull/214637) | M1-a：`ceildivsi` MININT 折疊 | ✅ **已 MERGE**（2026-08-12 13:39 UTC，`kuhar` 代 merge，squash commit `2a0c335d4538`） | 全綠 |
-| [#215123](https://github.com/llvm/llvm-project/pull/215123) | M1-b：`scaling_extf`/`scaling_truncf` 常數折疊 | ✅ **`tgymnich` 08-17 APPROVED**，approve 後無人 merge。09-04 純 rebase 到 `eac210e8d174`，head **`7f575d426089`**，approve 未消失 | 全綠 |
+| [#215123](https://github.com/llvm/llvm-project/pull/215123) | M1-b：`scaling_extf`/`scaling_truncf` 常數折疊 | ✅ **已 MERGE**（2026-09-04 12:01 UTC，`tgymnich` 代 merge，squash commit `57807585a6ae`）。09-04 上午 rebase ＋ ping，同日中午就進了。**第六個 commit** | 全綠 |
 | [#215318](https://github.com/llvm/llvm-project/pull/215318) | M1-d：transfer permutation lowering 支援 masked op | ✅ **已 MERGE**（2026-08-13 16:20 UTC，`banach-space` 代 merge，squash commit `1ccdf48548ed`）。**第一個 vector commit** | 全綠 |
 | [#215696](https://github.com/llvm/llvm-project/pull/215696) | 從 #214637 拆出：`ceildivs` INT_MIN 在 fold／兩個 index lowering／affine 展開／inference 全部一致 | ✅ **`kuhar` 08-14 APPROVED**，第二人（點名 `krzysz00`）三週未出現。09-04 純 rebase 到 `eac210e8d174`，head **`b55fb1c4d53b`**，approve 未消失 | 全綠 |
 | [#216056](https://github.com/llvm/llvm-project/pull/216056) | 🆕 `APFloat::convert` 不回報 sign／zero 失真（含 crash） | ✅ **已 MERGE**（2026-08-17 09:21 UTC，`tgymnich` 代 merge，squash commit `898b0188d901`）。**第五個 commit，也是第一個不在 MLIR 而在 `llvm/lib/Support` 的**。issue #215445 同時自動關閉 | 全綠 |
 | [#217892](https://github.com/llvm/llvm-project/pull/217892) | M1-e：`scaling_extf`／`scaling_truncf` 展開改用 scale 的值（`in / scale`） | 🔄 **review 中**。krzysz00 08-21 一個 nit ＋ 一則硬體補充，09-04 已回；head **`f2ab962761d9`**（base `eac210e8d174`，rebase 過 #216653） | 全綠 |
 | [#221185](https://github.com/llvm/llvm-project/pull/221185) | M2-a：`arith.trunci` 到 `i2` 的 sub-byte 重寫（第二個 vector patch） | 🆕 **2026-09-04 送出**，head `a00b482bb9bc`，reviewer `dcaballe` | 跑中 |
-| [#221248](https://github.com/llvm/llvm-project/pull/221248) | M2-b：轉置的 `transfer_write` → `subgroup_mma_store_matrix ... transpose`（第一個 GPU codegen patch） | 🆕 **2026-09-04 送出**，head `d3103c5cda5e`（加整合測試後 amend）。CODEOWNERS 沒涵蓋這個目錄、沒 triage 權限請不了 reviewer（API 404），改留言點名 `mplatings`（read 側作者）、`banach-space`、`dcaballe`（comment 5542532132） | 跑中 |
+| [#221248](https://github.com/llvm/llvm-project/pull/221248) | M2-b：轉置的 `transfer_write` → `subgroup_mma_store_matrix ... transpose`（第一個 GPU codegen patch） | ✅ **`mplatings` 09-04 15:54 APPROVED**（"LGTM"，送出當天、ping 後一小時內）。head `d3103c5cda5e`。沒 commit 權限，等人按 merge | 全綠 |
+| [#221268](https://github.com/llvm/llvm-project/pull/221268) | M2-c：`createReadOrMaskedRead`／`Write` 推導 `in_bounds` 要看索引（修 `affine-super-vectorize` 標錯 `true`） | 🆕 **2026-09-05 送出**，head `9dbb2ccb28a9`（base `e33e88551902`），4 個檔案 +189/−35。留言點名 `FedericoBruzzone`（#201180 作者）、`banach-space`、`dcaballe` | 跑中 |
+
+### 🔧 2026-09-05：第六個 open PR——`in_bounds` 推導要看索引（分支 `affine-vectorize-in-bounds-index`）
+
+候選清單第三名。動手前重驗：`VectorUtils.cpp:479/484/547/552` 四行 FIXME 還在（2026-06 #202766 搬進來的，原判斷是 #201180，FedericoBruzzone）。
+**撞車實查**：#215340（dhairyashilRG）已改成 opt-in pass `-vector-infer-in-bounds`，只把 `false` 變 `true`，修不到錯誤的 `true`；
+討論串裡 banach-space 對「在 create 時做分析」的顧慮是成本，dhairyashilRG 08-19 說「刪 FIXME 要在 create 時做 index-aware 計算」但沒認領。
+Discourse RFC「移除 `in_bounds`」（08-25 起）dcaballe 說推導「quite load bearing」，短期不會拆。結論：不重疊，直接做。
+
+**這題不是清 FIXME，是可重現的錯誤**。三個 repro（V = 8，memref<16xf32>）：`0 to 15` 讀 `%A[%i + 1]` 第二次讀 9..16；
+`4 to 16` 讀 `%A[%i]` 第二次讀 12..19；兩個都標 `in_bounds = [true]`，`-convert-vector-to-llvm` 後是無遮罩 `llvm.load`。
+推導：純量合法給 `0 <= idx < D`，加 `D % V == 0` 還要 **`idx ≡ 0 (mod V)`** 才推得出 `idx + V <= D`，缺的就是這條。
+`SuperVectorize.cpp` 設計說明的「always full tile」靠 `vector.transfer` 越界語意處理尾端，所以 trip count 不整除在契約內，`false` 是尾端的保護。
+
+commit `9dbb2ccb28a9`（基準 `e33e88551902`）：`computeInBoundsFromPermutationMap` 多收 indices；新 static helper `isKnownMultipleOf`
+（常數／`affine.for` IV 的 step 與下界／`affine.apply` 的 map，遞迴走下界 operand，把已知倍數的 operand 換成 `factor * d` 再用 `AffineExpr::isMultipleOf`）。
+沒用 `ValueBoundsConstraintSet`：要證的是整除不是上下界，而且這樣是 O(巢狀深度) 的語法走訪，回應 banach-space 的成本顧慮。
+`AffineOps.cpp:659` 有個 static 版但下界 map 不遞迴 operand，tiled matmul 的 `#map(%i)` 會算成 1，會讓 #201180 的 `MATMUL-COUNT-3` 退化，所以自己寫。
+無 map 分支的 FIXME 留著（樹裡走那條的索引都是零，或是 `insert_slice` offset，verifier 已保證）。
+
+測試：新檔 `vectorize_1d_inbounds.mlir` 6 個 case（偏移／對齊偏移／未對齊下界／對齊下界／tiling 形狀正反各一）；
+`vectorize_affine_apply.mlir` 的 `vec_affine_apply_2`（索引 `d0 mod 16 + 1`）原 CHECK 期望 `true` 是錯的，改成無屬性。
+答辯筆記 [`notes/vector-in-bounds-indices.md`](notes/vector-in-bounds-indices.md)，PR 描述稿 `patches/vector-in-bounds-indices-pr-body.md`。
+
+驗證：Affine／Linalg／Vector lit 348/348；`vectorize_2d_inbounds.mlir` 的 tiled matmul 仍 4 個 `true`；
+`check-mlir` **4219 passed / 16 failed**，16 個全在 `Integration/GPU/CUDA/`（15 個 `gpu.host_register`、1 個缺 `nvdisasm`），是 WSL2 環境問題，和 patch 無關。
+（整合測試開了之後 check-mlir 的基準就是這樣：4219 pass ＋ 這 16 個。）
+
+**已送出：[PR #221268](https://github.com/llvm/llvm-project/pull/221268)**，ping 稿 `patches/221268-reviewer-ping.md`。**第六個 open PR。**
 
 ### 🔧 2026-09-04：第五個 open PR——`VectorToGPU` 轉置 store（分支 `vector-to-gpu-transposed-store`）
 
