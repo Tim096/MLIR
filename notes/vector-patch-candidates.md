@@ -8,6 +8,8 @@
 
 ## 🥇 1. 子位元組 `arith.trunci` 到 `i2`
 
+> ✅ **2026-09-04 已送出 [#221185](https://github.com/llvm/llvm-project/pull/221185)**（分支 `vector-trunci-i2`，筆記 `notes/vector-trunci-i2.md`）。
+
 `mlir/lib/Dialect/Vector/Transforms/VectorEmulateNarrowType.cpp:2208`
 
 **缺口是不對稱**：`RewriteAlignedSubByteIntExt`（放大方向）**i4 與 i2 都支援**
@@ -35,6 +37,8 @@
 ---
 
 ## 🥈 2. 轉置的 `gpu.subgroup_mma_store_matrix`
+
+> ✅ **2026-09-04 已送出 [#221248](https://github.com/llvm/llvm-project/pull/221248)**（分支 `vector-to-gpu-transposed-store`，筆記 `notes/vector-to-gpu-transposed-store.md`）。
 
 `mlir/lib/Conversion/VectorToGPU/VectorToGPU.cpp:213`（＋ `:642`）
 

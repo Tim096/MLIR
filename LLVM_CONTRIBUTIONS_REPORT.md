@@ -5,11 +5,11 @@
 
 ## 結論先看
 
-我目前向 LLVM 官方專案提出過 **9 個程式碼修改**：
+我目前向 LLVM 官方專案提出過 **10 個程式碼修改**：
 
 - **5 個已正式合併**，成為 LLVM／MLIR 的一部分。
 - **2 個已通過 maintainer review**，測試也全部通過，正在等待合併。
-- **2 個正在 review**：一個處理不同硬體轉換路徑對 MXFP scale 的解讀分歧，一個補上 2-bit 量化的向量截斷重寫。
+- **3 個正在 review**：一個處理不同硬體轉換路徑對 MXFP scale 的解讀分歧，一個補上 2-bit 量化的向量截斷重寫，一個讓轉置的向量寫入也能用 GPU tensor core 的 MMA store。
 - 另外提出過 **2 個技術問題報告**；其中 1 個已由我自己修好並合併。
 
 這些工作主要處理 AI compiler 在量化、向量運算和數值轉換時可能遇到的錯誤，包括：
@@ -25,7 +25,7 @@
 |---|---:|---|
 | 已合併進 LLVM | **5** | FP8、整數邊界、Vector mask、LLVM 浮點核心 |
 | 已通過 review | **2** | MXFP 常數最佳化、跨後端整數正確性 |
-| Review 中 | **2** | MXFP scale 語意統一、2-bit 向量截斷 |
+| Review 中 | **3** | MXFP scale 語意統一、2-bit 向量截斷、GPU MMA 轉置 store |
 | 技術 Issue | **2** | 浮點 crash、MXFP 不同 lowering 結果不一致 |
 
 ## 已正式合併的 5 項貢獻
@@ -119,7 +119,7 @@ AI compiler 常用 mask 表示「只處理向量中的部分元素」，例如�
 
 這表示同一份模型或程式，可能因選擇不同 backend 而得到不同答案。我把 Index、Affine、LLVM、SPIR-V 與數值範圍分析的相關實作統一成相同的正確演算法。
 
-## 正在 review 的 2 項貢獻
+## 正在 review 的 3 項貢獻
 
 ### 8. 同一個 MXFP 操作經過不同 lowering，可能算出不同答案
 
@@ -148,6 +148,16 @@ Review 中 maintainer 進一步指出 AMD 硬體指令只讀 scale 的 sign 與 
 低位元量化模型會把權重壓成 2-bit 或 4-bit。MLIR 原本只對 4-bit 的向量截斷做了高效重寫，2-bit 直接放棄，交給 LLVM 自己拼湊；而反方向的 2-bit 解壓早在 2025 年就有人補上。
 
 我補上 2-bit 截斷這一半，把每四個 byte 用兩層 deinterleave 分組、遮罩、移位後合併成一個 byte。驗證方式是把全部 **256 種 byte 值**同時走重寫路徑與原始路徑，用 `mlir-runner` 印出結果逐位比對，並補上整合測試。
+
+### 10. 讓轉置的向量寫入也能用 GPU tensor core 的 MMA store
+
+- [PR #221248](https://github.com/llvm/llvm-project/pull/221248)
+- 狀態：**已送出，review 中**（2026-09-04）
+- 修改範圍：MLIR VectorToGPU（GPU codegen）
+
+MLIR 把向量運算轉成 GPU tensor core 指令時，轉置的向量讀取從 2026 年 2 月起就能直接對應到硬體的轉置 load，但轉置的向量寫入還是被整個放棄。擋住它的是一行 2021 年留下的 TODO，說要等 GPU dialect 加上 transpose 屬性；那個屬性 2022 年就加了，NVVM 與 SPIR-V 兩個後端也都會讀。
+
+我讓寫入側用和讀取側相同的判斷，並把屬性設上去。驗證除了 MLIR 完整測試 **3965 passed、0 failed**，還把轉出來的結果繼續往 NVVM 降，確認最後的 `wmma.store` 拿到 column-major layout，和向量寫入的語意一致。這是我第一個 GPU codegen 的 patch。
 
 ## 這些成果證明了什麼能力
 
@@ -180,13 +190,13 @@ Review 中 maintainer 進一步指出 AMD 硬體指令只讀 scale 的 sign 與 
 - 在 Arith／Vector 累積 3～5 個實質 merged patch：**完成，目前已有 5 個**。
 - FP8／MXFP 量化與 Vector 經驗：**已有實際 upstream 成果**。
 - 自動找 bug 與語意驗證工具：**尚未產品化**，但已在實際 patch 中使用 exhaustive testing 與 Alive2。
-- Linalg／GPU 層：**尚未開始**。
+- Linalg／GPU 層：**已送出第一個 GPU codegen patch**（#221248）。
 
 ## 對外介紹版本
 
 ### 30 秒自我介紹
 
-我是 LLVM／MLIR upstream contributor，目前有 5 個修改已正式合併，另外 2 個已通過 review，2 個在 review 中。我的工作主要處理 AI compiler 的 FP8／MXFP 量化、向量 lowering 和數值正確性，例如修正 NaN 被轉成 Infinity、不同 backend 算出不同結果，以及極端整數 overflow。我也會用 Alive2、全輸入枚舉和 regression tests 驗證修正，而不只是讓一般測試通過。
+我是 LLVM／MLIR upstream contributor，目前有 5 個修改已正式合併，另外 2 個已通過 review，3 個在 review 中。我的工作主要處理 AI compiler 的 FP8／MXFP 量化、向量 lowering、GPU codegen 和數值正確性，例如修正 NaN 被轉成 Infinity、不同 backend 算出不同結果，以及極端整數 overflow。我也會用 Alive2、全輸入枚舉和 regression tests 驗證修正，而不只是讓一般測試通過。
 
 ### 履歷版本
 
@@ -198,7 +208,7 @@ Review 中 maintainer 進一步指出 AMD 硬體指令只讀 scale 的 sign 與 
 
 1. 推動兩個已 approve 的 PR 合併，讓正式 upstream 貢獻由 5 個增加到 7 個。
 2. 完成 #217892 的 review，並接著送出 AMDGPU 硬體路徑的對應修正。
-3. 推進 #221185 的 review；下一題是 `VectorToGPU` 轉置 store（候選清單第 2 名），開始接觸 GPU codegen。
+3. 推進 #221185 與 #221248 的 review；五個 open PR 都在等人，先不開新題。下一題候選是 `in_bounds` 沒看 indices（候選清單第 3 名，需先和 #215340 協調）。
 4. 把目前用過的枚舉與語意驗證方法整理成自動化工具，用來系統性尋找更多 compiler correctness bug。
 
 ## 一句話總結

@@ -15,7 +15,7 @@
 
 ## 一句話現況
 
-**五個 commit 已進 upstream。四個 open PR：兩個已 approve 等人按 merge，#217892 在 review，#221185（i2 trunci）09-04 新送。**
+**五個 commit 已進 upstream。五個 open PR：兩個已 approve 等人按 merge，#217892 在 review，#221185（i2 trunci）與 #221248（VectorToGPU 轉置 store）09-04 新送。**
 **08-21 → 09-04 兩週三個 PR 都沒人回，09-04 全部 rebase 到當天 main、回掉 krzysz00 的 nit，再各 ping 一次。**
 **⚠️ 原則不變：已 approve 未 merge 就禮貌 ping，每次都要帶新資訊。**
 
@@ -30,6 +30,27 @@
 | [#216056](https://github.com/llvm/llvm-project/pull/216056) | 🆕 `APFloat::convert` 不回報 sign／zero 失真（含 crash） | ✅ **已 MERGE**（2026-08-17 09:21 UTC，`tgymnich` 代 merge，squash commit `898b0188d901`）。**第五個 commit，也是第一個不在 MLIR 而在 `llvm/lib/Support` 的**。issue #215445 同時自動關閉 | 全綠 |
 | [#217892](https://github.com/llvm/llvm-project/pull/217892) | M1-e：`scaling_extf`／`scaling_truncf` 展開改用 scale 的值（`in / scale`） | 🔄 **review 中**。krzysz00 08-21 一個 nit ＋ 一則硬體補充，09-04 已回；head **`f2ab962761d9`**（base `eac210e8d174`，rebase 過 #216653） | 全綠 |
 | [#221185](https://github.com/llvm/llvm-project/pull/221185) | M2-a：`arith.trunci` 到 `i2` 的 sub-byte 重寫（第二個 vector patch） | 🆕 **2026-09-04 送出**，head `a00b482bb9bc`，reviewer `dcaballe` | 跑中 |
+| [#221248](https://github.com/llvm/llvm-project/pull/221248) | M2-b：轉置的 `transfer_write` → `subgroup_mma_store_matrix ... transpose`（第一個 GPU codegen patch） | 🆕 **2026-09-04 送出**，head `defdf4e2b54b`，reviewer 待 bot 指派 | 跑中 |
+
+### 🔧 2026-09-04：第五個 open PR——`VectorToGPU` 轉置 store（分支 `vector-to-gpu-transposed-store`）
+
+候選清單第二名，動手前重驗：`VectorToGPU.cpp:213` 的 TODO 還在，`:642` 還是硬寫 `UnitAttr()`；
+open PR 只有 #218226（alepot55，改 scf.yield 判斷 4 行 ＋ 測試附在檔尾）碰同一個檔，不重疊。
+歷史：TODO 是 2021-06 原始 pass（`edd9515bd125`）留的，store 的 `transpose` 屬性 2022-12（`3d35546cd168`）就加了，
+read 側 2026-02（`18ecdbfe6c74`，mplatings）重寫時只做了 read。
+
+commit `defdf4e2b54b`（基準 `087826d491ea`），2 個檔案 +57/−8：`transferWriteSupportsMMAMatrixType` 從
+「第二個結果是最內層」改成和 read 側同一行 `is_contained`；`convertTransferWriteOp` 重用 `isFirstResultLastMapDimension` 設屬性。
+stride helper 不用動，read 側重寫時它已經只看 dim 位置。
+測試鏡射 read 側四個：`write_transpose`（ld 3）、3-D（21／3）、4-D（231／33）、`no_convert_write_transpose_not_last_dim`。
+答辯筆記 [`notes/vector-to-gpu-transposed-store.md`](notes/vector-to-gpu-transposed-store.md)，PR 描述稿 `patches/vector-to-gpu-transposed-store-pr-body.md`。
+
+驗證：lit VectorToGPU 3/3、`check-mlir` **3965 passed / 0 failed**、clang-format 無差異。
+本機沒 GPU，改用端到端追屬性：轉出的 `subgroup_mma_store_matrix ... transpose` 再過 `-convert-gpu-to-nvvm`
+得到 `nvvm.wmma.store ... layout = <col>`，語意和 `transfer_write` 的 `(d1, d0)` 一致（`(i, j)` 放 `base + j * ld + i`）。
+
+**已送出：[PR #221248](https://github.com/llvm/llvm-project/pull/221248)**（head `defdf4e2b54b`，base `a1ec06e04bc1`）。
+**第五個 open PR，第一個 `mlir/lib/Conversion/` 的 GPU codegen patch。**
 
 ### 📌 2026-09-04：兩週沒人回，三個 PR 全部 rebase，回 nit，再 ping
 
