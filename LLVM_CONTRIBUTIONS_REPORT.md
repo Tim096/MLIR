@@ -5,7 +5,7 @@
 
 ## 結論先看
 
-我目前向 LLVM 官方專案提出過 **17 個程式碼修改**：
+我目前向 LLVM 官方專案提出過 **18 個程式碼修改**：
 
 - **6 個已正式合併**，成為 LLVM／MLIR 的一部分。
 - **2 個已通過 maintainer review**，測試也全部通過，正在等待合併。
@@ -25,7 +25,7 @@
 |---|---:|---|
 | 已合併進 LLVM | **6** | FP8、MXFP 常數最佳化、整數邊界、Vector mask、LLVM 浮點核心 |
 | 已通過 review | **2** | 跨後端整數正確性、GPU MMA 轉置 store |
-| Review 中 | **9** | MXFP scale 語意統一、2-bit 向量截斷、向量化 in_bounds 越界判斷、tensor core elementwise epilogue 崩潰、insert_slice 向量化寫錯位置、混合精度 contract 折疊、帶 mask 的向量讀寫展開、AMDGPU／GPU 記憶體存取屬性保留 |
+| Review 中 | **10** | MXFP scale 語意統一、2-bit 向量截斷、向量化 in_bounds 越界判斷、tensor core elementwise epilogue 崩潰、insert_slice 向量化寫錯位置、混合精度 contract 折疊、帶 mask 的向量讀寫展開、AMDGPU／GPU／MemRef 記憶體存取屬性保留 |
 | 技術 Issue | **2** | 浮點 crash、MXFP 不同 lowering 結果不一致 |
 
 ## 已正式合併的 6 項貢獻
@@ -119,7 +119,7 @@ AI compiler 常用 mask 表示「只處理向量中的部分元素」，例如�
 
 這表示同一份模型或程式，可能因選擇不同 backend 而得到不同答案。我把 Index、Affine、LLVM、SPIR-V 與數值範圍分析的相關實作統一成相同的正確演算法。
 
-## 正在 review 的 9 項貢獻
+## 正在 review 的 10 項貢獻
 
 ### 8. 同一個 MXFP 操作經過不同 lowering，可能算出不同答案
 
@@ -229,6 +229,16 @@ GPU dialect 有一個轉換把 kernel 裡的多維記憶體存取改成「算出
 
 存取的元素與型別在改寫前後相同，三個提示都仍然成立。手寫的 builder 沒有 `invariant` 參數，我改用能帶齊三個屬性的 builder。驗證包含兩個新的 lit 測試與完整的 MLIR 測試套件。
 
+### 18. 修正消除 reinterpret_cast 時遺失記憶體存取提示的問題
+
+- [PR #221314](https://github.com/llvm/llvm-project/pull/221314)
+- 狀態：**已送出，review 中**（2026-09-05）
+- 修改範圍：MLIR MemRef dialect transforms
+
+MemRef dialect 有一個轉換會把「先用 `reinterpret_cast` 增減單位維度、再讀取」改寫成直接讀原本的記憶體，省掉一層轉型。重建讀取時只傳了原記憶體與對應後的索引，`nontemporal`、`alignment` 與 `invariant` 三個提示全部遺失。這和第 17 項是同一種問題，我在做第 17 項時順手記下這個位置，這一輪補上。
+
+改寫的前提保證前後讀的是同一個元素，三個提示仍然成立，所以用能帶齊屬性的 builder 轉傳。驗證包含一個新的 lit 測試與 MemRef dialect 的全部測試。
+
 ## 這些成果證明了什麼能力
 
 ### AI compiler 與數值正確性
@@ -278,7 +288,7 @@ GPU dialect 有一個轉換把 kernel 裡的多維記憶體存取改成「算出
 
 1. 推動兩個已 approve 的 PR（#215696、#221248）合併，讓正式 upstream 貢獻由 6 個增加到 8 個。
 2. 完成 #217892 的 review，並接著送出 AMDGPU 硬體路徑的對應修正。
-3. 推進 #221185、#221268、#221288、#221293、#221298、#221307、#221308 與 #221312 的 review。第二次掃描（GPU 轉換層＋Linalg 向量化）的結果在 `notes/gpu-linalg-patch-candidates.md`，剩下的候選是 `linalg.pack` 分解的 padding 支援。
+3. 推進 #221185、#221268、#221288、#221293、#221298、#221307、#221308、#221312 與 #221314 的 review。第二次掃描（GPU 轉換層＋Linalg 向量化）的結果在 `notes/gpu-linalg-patch-candidates.md`，剩下的候選是 `linalg.pack` 分解的 padding 支援。
 4. 把目前用過的枚舉與語意驗證方法整理成自動化工具，用來系統性尋找更多 compiler correctness bug。
 
 ## 一句話總結

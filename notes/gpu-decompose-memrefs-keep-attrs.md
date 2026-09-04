@@ -46,5 +46,5 @@
 
 - **「in-tree 誰用？」** 沒有 pipeline 用，只有它的 lit。`Passes.td` 說這是給「memref 降成裸指標」的 SPIR-V 類目標用的，作者 Ivan Butygin（Hardcode84，numba-mlir）。誠實講。
 - **「discardable attr 也掉了？」** 是，但那是 `replaceOpWithNewOp` 的一般行為，不在這題範圍。
-- **「`ElideReinterpretCast.cpp:622` 同樣的問題？」** 是同款，另開一題。
+- **「`ElideReinterpretCast.cpp:622` 同樣的問題？」** 是同款，已另開為 #221314（2026-09-05）。
 - 可能的 reviewer：Hardcode84、kuhar、krzysz00。
