@@ -77,8 +77,18 @@ write 側改成 `is_contained` 之後，就正好是這種 context。
 
 原本的 `no_convert_write_transpose`（負面測試）被 `write_transpose` 取代。
 
-本機沒有 GPU，所以沒有跑 integration。可以做的驗證：把轉出來的 `gpu.subgroup_mma_store_matrix ... transpose`
-再丟過 `-convert-gpu-to-nvvm`，看 `nvvm.wmma.store` 帶 `layout = #nvvm.mma_layout<col>`，證明屬性有一路流到後端。
+兩層驗證：
+1. 把轉出來的 `gpu.subgroup_mma_store_matrix ... transpose` 再丟過 `-convert-gpu-to-nvvm`，
+   `nvvm.wmma.store` 帶 `layout = <col>`，證明屬性有一路流到後端。
+2. **真的在 RTX 3070 上跑**：整合測試 `wmma-transposed-store-f16.mlir`，A[i][j] = 16i + j，
+   kernel 做 `transfer_read` → `addf %A, %A` → 轉置 `transfer_write`，印出 B 每一列 i 是 `[2i, 2(16+i), 2(32+i), ...]`，
+   也就是 B = 2·Aᵀ。若 `transpose` 沒設，印出來會是 2·A（每列是 `[32i, 32i+2, ...]`），一眼分得出來。
+
+寫這個測試踩到兩件事，reviewer 問起要能答：
+- 用 `gpu.alloc`／`gpu.memcpy` 而不是上游其他測試的 `gpu.host_register`：WSL2 不支援 `cuMemHostRegister`，
+  kernel 一碰那塊記憶體就 `CUDA_ERROR_ILLEGAL_ADDRESS`。alloc／memcpy 在哪裡都能跑，對上游是中性的選擇。
+- 用 `addf %A, %A` 而不是加零向量常數：常數會被轉成 `subgroup_mma_constant_matrix` 放在 launch 外面，
+  outlining 之後變成 kernel 的 `!gpu.mma_matrix` 參數，`gpu.launch_func` 就 lower 不了。
 
 ---
 

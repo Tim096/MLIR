@@ -157,7 +157,7 @@ Review 中 maintainer 進一步指出 AMD 硬體指令只讀 scale 的 sign 與 
 
 MLIR 把向量運算轉成 GPU tensor core 指令時，轉置的向量讀取從 2026 年 2 月起就能直接對應到硬體的轉置 load，但轉置的向量寫入還是被整個放棄。擋住它的是一行 2021 年留下的 TODO，說要等 GPU dialect 加上 transpose 屬性；那個屬性 2022 年就加了，NVVM 與 SPIR-V 兩個後端也都會讀。
 
-我讓寫入側用和讀取側相同的判斷，並把屬性設上去。驗證除了 MLIR 完整測試 **3965 passed、0 failed**，還把轉出來的結果繼續往 NVVM 降，確認最後的 `wmma.store` 拿到 column-major layout，和向量寫入的語意一致。這是我第一個 GPU codegen 的 patch。
+我讓寫入側用和讀取側相同的判斷，並把屬性設上去。驗證除了 MLIR 完整測試 **3965 passed、0 failed**，還把轉出來的結果繼續往 NVVM 降，確認最後的 `wmma.store` 拿到 column-major layout；並新增一個 tensor core 整合測試，在本機 RTX 3070 上實際執行，確認寫回的矩陣就是輸入的轉置。這是我第一個 GPU codegen 的 patch，也是第一個在真實 GPU 上驗證過的。
 
 ## 這些成果證明了什麼能力
 

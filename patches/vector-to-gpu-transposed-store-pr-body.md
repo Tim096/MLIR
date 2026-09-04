@@ -19,4 +19,6 @@ dimensions, so the stride helper is unchanged.
 
 Tests: the existing `no_convert_write_transpose` becomes a positive test,
 plus the 3-D and 4-D strided cases and a not-last-dim negative case,
-mirroring the read side.
+mirroring the read side. A tensor core integration test runs a transposed
+`transfer_write` through `convert-vector-to-gpu` and the NVVM pipeline and
+checks the stored matrix; it passes on an RTX 3070 (sm_86).

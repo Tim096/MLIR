@@ -30,7 +30,7 @@
 | [#216056](https://github.com/llvm/llvm-project/pull/216056) | 🆕 `APFloat::convert` 不回報 sign／zero 失真（含 crash） | ✅ **已 MERGE**（2026-08-17 09:21 UTC，`tgymnich` 代 merge，squash commit `898b0188d901`）。**第五個 commit，也是第一個不在 MLIR 而在 `llvm/lib/Support` 的**。issue #215445 同時自動關閉 | 全綠 |
 | [#217892](https://github.com/llvm/llvm-project/pull/217892) | M1-e：`scaling_extf`／`scaling_truncf` 展開改用 scale 的值（`in / scale`） | 🔄 **review 中**。krzysz00 08-21 一個 nit ＋ 一則硬體補充，09-04 已回；head **`f2ab962761d9`**（base `eac210e8d174`，rebase 過 #216653） | 全綠 |
 | [#221185](https://github.com/llvm/llvm-project/pull/221185) | M2-a：`arith.trunci` 到 `i2` 的 sub-byte 重寫（第二個 vector patch） | 🆕 **2026-09-04 送出**，head `a00b482bb9bc`，reviewer `dcaballe` | 跑中 |
-| [#221248](https://github.com/llvm/llvm-project/pull/221248) | M2-b：轉置的 `transfer_write` → `subgroup_mma_store_matrix ... transpose`（第一個 GPU codegen patch） | 🆕 **2026-09-04 送出**，head `defdf4e2b54b`。CODEOWNERS 沒涵蓋這個目錄、沒 triage 權限請不了 reviewer（API 404），改留言點名 `mplatings`（read 側作者）、`banach-space`、`dcaballe`（comment 5542532132） | 跑中 |
+| [#221248](https://github.com/llvm/llvm-project/pull/221248) | M2-b：轉置的 `transfer_write` → `subgroup_mma_store_matrix ... transpose`（第一個 GPU codegen patch） | 🆕 **2026-09-04 送出**，head `d3103c5cda5e`（加整合測試後 amend）。CODEOWNERS 沒涵蓋這個目錄、沒 triage 權限請不了 reviewer（API 404），改留言點名 `mplatings`（read 側作者）、`banach-space`、`dcaballe`（comment 5542532132） | 跑中 |
 
 ### 🔧 2026-09-04：第五個 open PR——`VectorToGPU` 轉置 store（分支 `vector-to-gpu-transposed-store`）
 
@@ -46,10 +46,17 @@ stride helper 不用動，read 側重寫時它已經只看 dim 位置。
 答辯筆記 [`notes/vector-to-gpu-transposed-store.md`](notes/vector-to-gpu-transposed-store.md)，PR 描述稿 `patches/vector-to-gpu-transposed-store-pr-body.md`。
 
 驗證：lit VectorToGPU 3/3、`check-mlir` **3965 passed / 0 failed**、clang-format 無差異。
-本機沒 GPU，改用端到端追屬性：轉出的 `subgroup_mma_store_matrix ... transpose` 再過 `-convert-gpu-to-nvvm`
+端到端追屬性：轉出的 `subgroup_mma_store_matrix ... transpose` 再過 `-convert-gpu-to-nvvm`
 得到 `nvvm.wmma.store ... layout = <col>`，語意和 `transfer_write` 的 `(d1, d0)` 一致（`(i, j)` 放 `base + j * ld + i`）。
 
-**已送出：[PR #221248](https://github.com/llvm/llvm-project/pull/221248)**（head `defdf4e2b54b`，base `a1ec06e04bc1`）。
+**真的在 GPU 上跑過**：本機有 RTX 3070（sm_86），當天把 CUDA 12.8 redist 解到 `~/cuda`（不用 root）、
+build 加 NVPTX target 並開 `MLIR_ENABLE_CUDA_RUNNER`／`MLIR_RUN_CUDA_TENSOR_CORE_TESTS`（細節在記憶 `local-gpu-and-cuda-toolchain`）。
+新增整合測試 `mlir/test/Integration/GPU/CUDA/TensorCore/wmma-transposed-store-f16.mlir`：A[i][j] = 16i + j，
+kernel 用 `transfer_read` → `addf` → 轉置 `transfer_write`，經 `convert-vector-to-gpu` ＋ NVVM pipeline，印出 B = 2·Aᵀ，lit PASS。
+⚠️ WSL2 上 `gpu.host_register` 會 `CUDA_ERROR_ILLEGAL_ADDRESS`（上游 `wmma-matmul-f16/f32` 因此在本機 FAIL，bare-ptr 那個 PASS），
+所以測試用 `gpu.alloc`／`gpu.memcpy`。另外零向量常數放在 launch 裡會被搬出去變 kernel 參數而 lower 失敗，所以用 `addf %A, %A`。
+
+**已送出：[PR #221248](https://github.com/llvm/llvm-project/pull/221248)**（head `d3103c5cda5e`，base `a1ec06e04bc1`，3 個檔案 +150/−8）。
 **第五個 open PR，第一個 `mlir/lib/Conversion/` 的 GPU codegen patch。**
 
 ### 📌 2026-09-04：兩週沒人回，三個 PR 全部 rebase，回 nit，再 ping
