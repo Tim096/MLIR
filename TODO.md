@@ -15,7 +15,7 @@
 
 ## 一句話現況
 
-**六個 commit 已進 upstream（#215123 09-04 中午 merge）。十二個 open PR：#215696 與 #221248 已 approve 等人按 merge，#217892 在 review，#221185（i2 trunci）09-04 送、#221268（`in_bounds` 要看索引）、#221288（WMMA elementwise 降 NVVM 崩潰）、#221293（`insert_slice` 向量化前置條件）、#221298（ext 折進 `vector.contract` 要同來源型別）、#221307（`convert-vector-to-scf` 拒收 `vector.mask` 裡的 transfer op）、#221308（AMDGPU maskedload 保留 `alignment`）、#221312（`gpu-decompose-memrefs` 保留 load／store 屬性）與 #221314（`memref-elide-reinterpret-cast` 保留 load 屬性）09-05 送。**
+**六個 commit 已進 upstream（#215123 09-04 中午 merge）。十五個 open PR：#215696 與 #221248 已 approve 等人按 merge，#217892 在 review，#221185（i2 trunci）09-04 送、#221268（`in_bounds` 要看索引）、#221288（WMMA elementwise 降 NVVM 崩潰）、#221293（`insert_slice` 向量化前置條件）、#221298（ext 折進 `vector.contract` 要同來源型別）、#221307（`convert-vector-to-scf` 拒收 `vector.mask` 裡的 transfer op）、#221308（AMDGPU maskedload 保留 `alignment`）、#221312（`gpu-decompose-memrefs` 保留 load／store 屬性）、#221314（`memref-elide-reinterpret-cast` 保留 load 屬性）、#221317（六個 vector folder 保留 `alignment`）、#221319（vector linearize 保留 load／store 屬性）與 #221320（`memref-emulate-wide-int` 補 `alignment`／`invariant`）09-05 送。**
 **08-21 → 09-04 兩週三個 PR 都沒人回，09-04 全部 rebase 到當天 main、回掉 krzysz00 的 nit，再各 ping 一次；#215123 當天就進了，#221248 送出當天就被 approve。**
 **⚠️ 原則不變：已 approve 未 merge 就禮貌 ping，每次都要帶新資訊。**
 
@@ -39,6 +39,9 @@
 | [#221308](https://github.com/llvm/llvm-project/pull/221308) | GPU-4：`amdgpu-maskedload-to-load` 重建 `vector.load`／`store` 時丟掉 `alignment`，LLVM 層退回 element 對齊（f16 從 `align 16` 變 `align 2`）；透過 builder 轉傳（第一個 AMDGPU patch，效能不是正確性） | 🆕 **2026-09-05 送出**，head `8378fb4c6fbd`（base `f6a369fa4a57`），2 個檔案 +48/−2。自動指派 `krzysz00`、`kuhar`；留言（5544719647）點名 `krzysz00`、`Groverkss`、`kuhar` | 跑中 |
 | [#221312](https://github.com/llvm/llvm-project/pull/221312) | GPU-3：`gpu-decompose-memrefs` 重建 `memref.load`／`store` 時丟掉 `nontemporal`／`alignment`／`invariant`；改用帶三個屬性的 builder（第三個 GPU dialect patch） | 🆕 **2026-09-05 送出**，head `292a8a8cb25a`（base `f6a369fa4a57`），2 個檔案 +60/−2。自動指派 `fabianmcg`；留言（5544811835）點名 `Hardcode84`（pass 作者）、`kuhar`、`krzysz00` | 跑中 |
 | [#221314](https://github.com/llvm/llvm-project/pull/221314) | M-1：`memref-elide-reinterpret-cast` 的 `RewriteLoadFromReinterpretCast` 重建 `memref.load` 時丟掉 `nontemporal`／`alignment`／`invariant`；改用帶三個屬性的 builder（#221312 同款） | 🆕 **2026-09-05 送出**，head `c63ecc0da80d`（base `f6a369fa4a57`），2 個檔案 +18/−1。留言（5544900426）點名 `ioghiban`（檔案作者）、`banach-space`（三個前 PR 的 approver） | 跑中 |
+| [#221317](https://github.com/llvm/llvm-project/pull/221317) | VF-1：`VectorOps.cpp` 六個 canonicalization folder（maskedload／maskedstore／expandload／compressstore 全 true、gather／scatter contiguous）重建時丟 `alignment`；六處各加 `getMaybeAlign()` | 🆕 **2026-09-05 送出**，head `1b2aca62fe7e`（base `f6a369fa4a57`），3 個檔案 +98/−8。自動指派 banach-space／nicolasvasilache／dcaballe／Groverkss；留言（5545072108）點名 banach-space、dcaballe、kuhar。check-mlir 4588／16 同基準 | 跑中 |
+| [#221319](https://github.com/llvm/llvm-project/pull/221319) | VL-1：`VectorLinearize.cpp` 的 `LinearizeVectorLoad`／`Store` 丟 `alignment`＋`nontemporal`；兩處轉發 | 🆕 **2026-09-05 送出**，head `2bb26b72e617`，2 個檔案 +28/−4。留言（5545099840）點名 nbpatel（pattern 作者）、newling（approver）、banach-space | 跑中 |
+| [#221320](https://github.com/llvm/llvm-project/pull/221320) | M-2：`EmulateWideInt.cpp` 只轉 `nontemporal`，漏 `alignment`／`invariant`；改用 attr builder 全轉 | 🆕 **2026-09-05 送出**，head `7b2fa9a73327`，2 個檔案 +19/−2。留言（5545103709）點名 kuhar（pass 作者）、banach-space | 跑中 |
 
 ### 🔧 2026-09-05：第十～十二個 open PR——平行送三題（分支 `vector-to-scf-decline-masked`、`amdgpu-maskedload-keep-alignment`、`gpu-decompose-memrefs-keep-attrs`）
 
@@ -59,6 +62,16 @@
 前一輪就標記 `ElideReinterpretCast.cpp:622` 有一樣的 `replaceOpWithNewOp<memref::LoadOp>(op, src, idxs)`。Repro：`memref.load %rc[...] alignment(16) nontemporal(true) invariant(true)` 經 `-memref-elide-reinterpret-cast` 後三個屬性全掉。pattern 的前提（offset 0、非 unit dim 順序與大小一致、unit dim 索引為 0）保證改寫前後是同一個元素，所以三個屬性直接轉發。一行改、一個測試，`Dialect/MemRef` 33 個 lit 全過。這一輪同時放兩個 agent 掃 `mlir/lib` 裡其他重建 `memref.load/store`、`vector.load/store/maskedload/...` 的地方，看還有沒有同款。筆記 [`notes/memref-elide-rc-keep-attrs.md`](notes/memref-elide-rc-keep-attrs.md)。
 
 **已送出：[#221314](https://github.com/llvm/llvm-project/pull/221314)。十二個 open PR。**
+
+### 🔧 2026-09-05：第十四～十六個 open PR——全樹掃「重建 op 丟屬性」，一次送三個（分支 `vector-fold-keep-alignment`、`vector-linearize-keep-attrs`、`memref-emulate-wide-int-keep-attrs`）
+
+#221312／#221314 同款的問題不會只有兩處。兩個 agent 平行只讀 tree：一個掃 `memref.load/store` 的重建點，一個掃八個 vector 記憶體 op 的重建點，判準是「來源有屬性、新 op 同類、位址不變」。結果在 [`notes/attr-drop-sweep.md`](notes/attr-drop-sweep.md)：轉發無爭議的還有十一處，位址會移、要重算 alignment 的另有四組。
+
+這輪挑三組送：**VF-1（#221317）** 是 `-canonicalize` 裡的六個 folder，影響面最大（每條 pipeline 都跑），六個 op 都實作 `AlignmentAttrOpInterface` 所以一律 `getMaybeAlign()`，跑完整套 check-mlir；**VL-1（#221319）** 兩行，XeGPU 是主要使用者，連帶跑 XeGPU／VectorToXeGPU／VectorToLLVM 共 145 個 lit；**M-2（#221320）** 是「部分轉發」（2023 年接了 `nontemporal`，後來的兩個屬性沒人接），最好答。三個分支都從 `f6a369fa4a57` 開，建置與 lit 串行。
+
+沒送的：`VectorUnroll` gather、`LowerVectorMask` gather、bufferization gather／scatter、`StoreOpFromBroadcast` 四處也是位址不變，**等 #221317／#221319 的意見再送**，同一批 reviewer 一天內收太多會反感。`ExtractOpFromLoad`／`UnrollLoad/Store`／兩個 narrow-type emulation 位址會移，alignment 要 `min(align, offset)`，是另一種題。另外 `LowerVectorGather.cpp:297` 是反向（把 gather 的 alignment 抄到 data-dependent 的 scalar load 上），要先弄清 gather alignment 的語意。筆記 [`notes/vector-fold-keep-alignment.md`](notes/vector-fold-keep-alignment.md)、[`notes/vector-linearize-keep-attrs.md`](notes/vector-linearize-keep-attrs.md)、[`notes/memref-emulate-wide-int-keep-attrs.md`](notes/memref-emulate-wide-int-keep-attrs.md)。
+
+**已送出：[#221317](https://github.com/llvm/llvm-project/pull/221317)、[#221319](https://github.com/llvm/llvm-project/pull/221319)、[#221320](https://github.com/llvm/llvm-project/pull/221320)。十五個 open PR。**
 
 **下一題**：候選清單剩 L-2（`DecomposeOuterUnitDimsPackOpPattern` 的 padding bail，中等設計風險，先 @ #218141 作者）與 V-2（價值最低）；`ElideReinterpretCast.cpp:622` 的同款已送出為 #221314。
 
@@ -1602,11 +1615,11 @@ CHECK 反映改動前行為；第二個 commit 才是修正 + CHECK 的 diff。
 
 見下面「⭐ 題目清單」的 **M1-b**。
 
-### 5. 2026-09-05 現況：等十二個 open PR
+### 5. 2026-09-05 現況：等十五個 open PR
 
 - 等 merge：#215696（kuhar approve，第二人未出現）、#221248（mplatings approve）。**已 approve 未 merge 就禮貌 ping，要帶新資訊。**
 - 等 review：#217892（krzysz00）、#221185（dcaballe）、#221268（banach-space／dcaballe／FedericoBruzzone）、#221288（fabianmcg／grypp）、#221293（banach-space／hanhanW）、#221298（raikonenfnu／banach-space／dcaballe）。09-05 實查前七個都沒有新 review。
-- 第二次掃描已做完 → `notes/gpu-linalg-patch-candidates.md`；GPU-1 已送出為 #221288，L-1 已送出為 #221293，V-1 已送出為 #221298，VS-1（VectorToSCF 的 `vector.mask`）為 #221307，GPU-4 為 #221308，GPU-3 為 #221312，GPU-3 同款的 `ElideReinterpretCast` 為 #221314；GPU-2 查證後不是 bug。**剩 L-2（設計風險）、V-2（價值低），先等 review。**
+- 第二次掃描已做完 → `notes/gpu-linalg-patch-candidates.md`；GPU-1 已送出為 #221288，L-1 已送出為 #221293，V-1 已送出為 #221298，VS-1（VectorToSCF 的 `vector.mask`）為 #221307，GPU-4 為 #221308，GPU-3 為 #221312，GPU-3 同款的 `ElideReinterpretCast` 為 #221314；GPU-2 查證後不是 bug。 全樹掃描（`notes/attr-drop-sweep.md`）再送 #221317／#221319／#221320；**還有四處位址不變的可送（等前兩個的 review 意見），四組位址會移的要重算 alignment。****剩 L-2（設計風險）、V-2（價值低），先等 review。**
 
 ---
 

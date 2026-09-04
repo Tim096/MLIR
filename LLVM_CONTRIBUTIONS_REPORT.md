@@ -5,7 +5,7 @@
 
 ## 結論先看
 
-我目前向 LLVM 官方專案提出過 **18 個程式碼修改**：
+我目前向 LLVM 官方專案提出過 **21 個程式碼修改**：
 
 - **6 個已正式合併**，成為 LLVM／MLIR 的一部分。
 - **2 個已通過 maintainer review**，測試也全部通過，正在等待合併。
@@ -25,7 +25,7 @@
 |---|---:|---|
 | 已合併進 LLVM | **6** | FP8、MXFP 常數最佳化、整數邊界、Vector mask、LLVM 浮點核心 |
 | 已通過 review | **2** | 跨後端整數正確性、GPU MMA 轉置 store |
-| Review 中 | **10** | MXFP scale 語意統一、2-bit 向量截斷、向量化 in_bounds 越界判斷、tensor core elementwise epilogue 崩潰、insert_slice 向量化寫錯位置、混合精度 contract 折疊、帶 mask 的向量讀寫展開、AMDGPU／GPU／MemRef 記憶體存取屬性保留 |
+| Review 中 | **13** | MXFP scale 語意統一、2-bit 向量截斷、向量化 in_bounds 越界判斷、tensor core elementwise epilogue 崩潰、insert_slice 向量化寫錯位置、混合精度 contract 折疊、帶 mask 的向量讀寫展開、AMDGPU／GPU／MemRef／Vector 記憶體存取屬性保留（六項） |
 | 技術 Issue | **2** | 浮點 crash、MXFP 不同 lowering 結果不一致 |
 
 ## 已正式合併的 6 項貢獻
@@ -119,7 +119,7 @@ AI compiler 常用 mask 表示「只處理向量中的部分元素」，例如�
 
 這表示同一份模型或程式，可能因選擇不同 backend 而得到不同答案。我把 Index、Affine、LLVM、SPIR-V 與數值範圍分析的相關實作統一成相同的正確演算法。
 
-## 正在 review 的 10 項貢獻
+## 正在 review 的 13 項貢獻
 
 ### 8. 同一個 MXFP 操作經過不同 lowering，可能算出不同答案
 
@@ -239,6 +239,32 @@ MemRef dialect 有一個轉換會把「先用 `reinterpret_cast` 增減單位維
 
 改寫的前提保證前後讀的是同一個元素，三個提示仍然成立，所以用能帶齊屬性的 builder 轉傳。驗證包含一個新的 lit 測試與 MemRef dialect 的全部測試。
 
+### 19. 修正向量記憶體操作在 canonicalization 時遺失對齊資訊的問題
+
+- [PR #221317](https://github.com/llvm/llvm-project/pull/221317)
+- 狀態：**已送出，review 中**（2026-09-05）
+- 修改範圍：MLIR Vector dialect canonicalization
+
+做完第 17、18 項之後，我把整個 MLIR 程式庫掃了一遍，找所有「重建記憶體操作卻沒把屬性帶過去」的地方，並依「改寫前後位址是否相同」分類（同位址才能直接轉傳）。這一項是其中影響最大的：Vector dialect 的六個 canonicalization 規則（mask 全為真時把帶 mask 的讀寫折成一般讀寫；索引連續時把 gather／scatter 折成帶 mask 的讀寫）都比 `alignment` 屬性早寫成，折疊時對齊資訊全部遺失。canonicalization 幾乎每條編譯流程都會跑，所以下游只要標了對齊，經過這一步就會退回元素對齊。
+
+六個規則折疊前後存取的位址相同，我透過各 op 共用的 alignment 介面把屬性轉傳過去，每個規則各加一個測試，並跑完整的 MLIR 測試套件。
+
+### 20. 修正向量讀寫線性化時遺失屬性的問題
+
+- [PR #221319](https://github.com/llvm/llvm-project/pull/221319)
+- 狀態：**已送出，review 中**（2026-09-05）
+- 修改範圍：MLIR Vector dialect transforms（linearization）
+
+線性化把 `vector<1x1x...xN>` 的讀寫改成 `vector<N>`，只改向量型別，記憶體位址與存取寬度不變，但重建時遺失了 `alignment` 與 `nontemporal`。這個轉換的主要使用者是 Intel 的 XeGPU 流程。修法是把兩個屬性轉傳，並跑 Vector、XeGPU 與 Vector 到 LLVM 的相關測試。
+
+### 21. 補齊寬整數模擬轉換遺漏的屬性
+
+- [PR #221320](https://github.com/llvm/llvm-project/pull/221320)
+- 狀態：**已送出，review 中**（2026-09-05）
+- 修改範圍：MLIR MemRef dialect transforms（wide integer emulation）
+
+寬整數模擬把目標不支援的 `i64` 記憶體改成 `vector<2xi32>`，位元組配置完全相同。這個轉換在 2023 年就已經轉傳 `nontemporal`，但後來新增的 `alignment` 與 `invariant` 沒有人接上。修法是在同一個呼叫裡把三個屬性一起轉傳，並補一個測試。
+
 ## 這些成果證明了什麼能力
 
 ### AI compiler 與數值正確性
@@ -288,7 +314,7 @@ MemRef dialect 有一個轉換會把「先用 `reinterpret_cast` 增減單位維
 
 1. 推動兩個已 approve 的 PR（#215696、#221248）合併，讓正式 upstream 貢獻由 6 個增加到 8 個。
 2. 完成 #217892 的 review，並接著送出 AMDGPU 硬體路徑的對應修正。
-3. 推進 #221185、#221268、#221288、#221293、#221298、#221307、#221308、#221312 與 #221314 的 review。第二次掃描（GPU 轉換層＋Linalg 向量化）的結果在 `notes/gpu-linalg-patch-candidates.md`，剩下的候選是 `linalg.pack` 分解的 padding 支援。
+3. 推進 #221185、#221268、#221288、#221293、#221298、#221307、#221308、#221312、#221314、#221317、#221319 與 #221320 的 review。掃描結果（`notes/attr-drop-sweep.md`）還有四處同款可送、四組要重算 alignment 的另一類問題。第二次掃描（GPU 轉換層＋Linalg 向量化）的結果在 `notes/gpu-linalg-patch-candidates.md`，剩下的候選是 `linalg.pack` 分解的 padding 支援。
 4. 把目前用過的枚舉與語意驗證方法整理成自動化工具，用來系統性尋找更多 compiler correctness bug。
 
 ## 一句話總結
