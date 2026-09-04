@@ -15,7 +15,7 @@
 
 ## 一句話現況
 
-**六個 commit 已進 upstream（#215123 09-04 中午 merge）。六個 open PR：#215696 與 #221248 已 approve 等人按 merge，#217892 在 review，#221185（i2 trunci）09-04 送、#221268（`in_bounds` 要看索引）與 #221288（WMMA elementwise 降 NVVM 崩潰）09-05 送。**
+**六個 commit 已進 upstream（#215123 09-04 中午 merge）。七個 open PR：#215696 與 #221248 已 approve 等人按 merge，#217892 在 review，#221185（i2 trunci）09-04 送、#221268（`in_bounds` 要看索引）、#221288（WMMA elementwise 降 NVVM 崩潰）與 #221293（`insert_slice` 向量化前置條件）09-05 送。**
 **08-21 → 09-04 兩週三個 PR 都沒人回，09-04 全部 rebase 到當天 main、回掉 krzysz00 的 nit，再各 ping 一次；#215123 當天就進了，#221248 送出當天就被 approve。**
 **⚠️ 原則不變：已 approve 未 merge 就禮貌 ping，每次都要帶新資訊。**
 
@@ -33,6 +33,24 @@
 | [#221248](https://github.com/llvm/llvm-project/pull/221248) | M2-b：轉置的 `transfer_write` → `subgroup_mma_store_matrix ... transpose`（第一個 GPU codegen patch） | ✅ **`mplatings` 09-04 15:54 APPROVED**（"LGTM"，送出當天、ping 後一小時內）。head `d3103c5cda5e`。沒 commit 權限，等人按 merge | 全綠 |
 | [#221268](https://github.com/llvm/llvm-project/pull/221268) | M2-c：`createReadOrMaskedRead`／`Write` 推導 `in_bounds` 要看索引（修 `affine-super-vectorize` 標錯 `true`） | 🆕 **2026-09-05 送出**，head `9dbb2ccb28a9`（base `e33e88551902`），4 個檔案 +189/−35。CODEOWNERS 自動指派 `banach-space`、`nicolasvasilache`、`dcaballe`、`Groverkss`；留言（5543300681）另點名 `FedericoBruzzone`（#201180 作者） | 跑中 |
 | [#221288](https://github.com/llvm/llvm-project/pull/221288) | M2-d：`gpu.subgroup_mma_elementwise` 降 NVVM——15 種運算 10 種 `llvm_unreachable`，補 8 種、依 PTX ISA 拒收 `extf`／`truncf`、擋 packed fragment（第二個 GPU codegen patch） | 🆕 **2026-09-05 送出**，head `704d5b9c54b2`（base `c7ba46e37d78`），4 個檔案 +233/−12。自動指派 `fabianmcg`；留言（5543974824）另點名 `grypp`、`kuhar`、`simpel01`（#182499 作者） | 跑中 |
+| [#221293](https://github.com/llvm/llvm-project/pull/221293) | L-1：`tensor.insert_slice` 向量化——前置條件沒查 stride 與 rank-reducing 丟掉哪一維，strided／中間維度的 insert 被寫到錯的位置；加兩個 bail（第一個 Linalg patch） | 🆕 **2026-09-05 送出**，head `ae1f85cbb9d0`（base `08d499665a14`），3 個檔案 +88/−4。CODEOWNERS 自動指派 `banach-space`、`nicolasvasilache`、`dcaballe`、`Groverkss`；留言（5544240776）點名 `banach-space`（#122927 作者）、`hanhanW` | 跑中 |
+
+### 🔧 2026-09-05：第八個 open PR——`insert_slice` 向量化的前置條件（分支 `linalg-insert-slice-vectorize-precondition`）
+
+`notes/gpu-linalg-patch-candidates.md` 的 L-1。`vectorizeAsInsertSliceOp`（#122927，banach-space）把整個 source 讀成一個 vector，再用 minor identity map 寫到 offset；
+前置條件沒查 stride、也沒查 rank-reducing 丟掉的是哪一維，所以 stride `[3,1]` 的 insert 被寫成連續兩列、`8x4` 插進 `8x1x4` 只留第 0 列。
+同檔案舊的 `PadOpVectorizationWithInsertSlicePattern` 本來就有這兩個檢查。
+
+**選最小修法**：前置條件加 `hasUnitStride()` bail ＋ `getDroppedDims().find_last() >= rankDiff` bail（`getDroppedDims` 從尾端配對，所以「dropped dims 全在最前面」＝「source 對到 dest 最內層」）。
+完整修法要動 `createWriteOrMaskedWrite` 的 mask 尺寸計算，會和 #221268 撞，之後另開。
+試過順手刪死掉的 `readIndices`，會讓 `insert-slice.mlir` 五個既有測試的 SSA 名稱位移，還原了。
+
+驗證：五個重現案例全改成 `Attempted to vectorize, but failed`；`Dialect/Linalg`＋`Tensor`＋`Vector` 306 個 lit 全過；check-mlir 4218 過／16 失敗（與基準同一組環境失敗）。
+答辯筆記 [`notes/linalg-insert-slice-vectorize-precondition.md`](notes/linalg-insert-slice-vectorize-precondition.md)，PR 描述稿 `patches/linalg-insert-slice-vectorize-precondition-pr-body.md`，ping 稿 `patches/221293-reviewer-ping.md`。
+
+**已送出：[PR #221293](https://github.com/llvm/llvm-project/pull/221293)。第八個 open PR，第一個 Linalg patch。**
+
+**下一題**：V-1（`FoldArithExtIntoContractionOp` 混寬 ext 過不了 verifier，~12 行）；之後 GPU-2（SPIR-V compute 路徑轉置）。
 
 ### 🔧 2026-09-05：第七個 open PR——WMMA elementwise 降 NVVM 崩潰（分支 `gpu-wmma-elementwise-nvvm`）
 
@@ -1546,8 +1564,8 @@ CHECK 反映改動前行為；第二個 commit 才是修正 + CHECK 的 diff。
 ### 5. 2026-09-05 現況：等五個 open PR，下一題要重新掃描
 
 - 等 merge：#215696（kuhar approve，第二人未出現）、#221248（mplatings approve）。**已 approve 未 merge 就禮貌 ping，要帶新資訊。**
-- 等 review：#217892（krzysz00）、#221185（dcaballe）、#221268（banach-space／dcaballe／FedericoBruzzone）、#221288（fabianmcg／grypp）。
-- 第二次掃描已做完 → `notes/gpu-linalg-patch-candidates.md`；GPU-1 已送出為 #221288。**下一題：L-1（`insert_slice` 向量化錯 IR），填充題 V-1。**
+- 等 review：#217892（krzysz00）、#221185（dcaballe）、#221268（banach-space／dcaballe／FedericoBruzzone）、#221288（fabianmcg／grypp）、#221293（banach-space／hanhanW）。09-05 實查前六個都沒有新 review。
+- 第二次掃描已做完 → `notes/gpu-linalg-patch-candidates.md`；GPU-1 已送出為 #221288，L-1 已送出為 #221293。**下一題：V-1（`FoldArithExtIntoContractionOp`），再來 GPU-2。**
 
 ---
 

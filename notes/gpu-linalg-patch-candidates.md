@@ -20,7 +20,7 @@ SPIR-V 側 12 種都有。`extf`／`truncf` 依 PTX ISA 不可能做（f16↔f32
 
 ## 候選（依價值排序）
 
-### L-1. `tensor.insert_slice` 向量化：rank-reducing 與非單位 stride 產生錯的 IR 🥇
+### L-1. `tensor.insert_slice` 向量化：rank-reducing 與非單位 stride 產生錯的 IR 🥇 → ✅ 已送出 [#221293](https://github.com/llvm/llvm-project/pull/221293)（2026-09-05，最小修法）
 
 `Linalg/Transforms/Vectorization.cpp:1984`（`vectorizeInsertSliceOpPrecondition`）、`:3034`（FIXME `rankDiff`）、`:3049`（建了 `readIndices` 卻沒傳）
 

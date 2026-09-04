@@ -25,7 +25,7 @@
 |---|---:|---|
 | 已合併進 LLVM | **6** | FP8、MXFP 常數最佳化、整數邊界、Vector mask、LLVM 浮點核心 |
 | 已通過 review | **2** | 跨後端整數正確性、GPU MMA 轉置 store |
-| Review 中 | **4** | MXFP scale 語意統一、2-bit 向量截斷、向量化 in_bounds 越界判斷、tensor core elementwise epilogue 崩潰 |
+| Review 中 | **5** | MXFP scale 語意統一、2-bit 向量截斷、向量化 in_bounds 越界判斷、tensor core elementwise epilogue 崩潰、insert_slice 向量化寫錯位置 |
 | 技術 Issue | **2** | 浮點 crash、MXFP 不同 lowering 結果不一致 |
 
 ## 已正式合併的 6 項貢獻
@@ -119,7 +119,7 @@ AI compiler 常用 mask 表示「只處理向量中的部分元素」，例如�
 
 這表示同一份模型或程式，可能因選擇不同 backend 而得到不同答案。我把 Index、Affine、LLVM、SPIR-V 與數值範圍分析的相關實作統一成相同的正確演算法。
 
-## 正在 review 的 4 項貢獻
+## 正在 review 的 5 項貢獻
 
 ### 8. 同一個 MXFP 操作經過不同 lowering，可能算出不同答案
 
@@ -179,6 +179,16 @@ MLIR 的 GPU dialect 定義了 15 種可以直接套在 tensor core 矩陣片段
 
 我對照 PTX ISA 的規格分成兩類處理：8 種算術運算按規格允許的方式逐暫存器實作；f16 與 f32 之間的轉換在規格裡明寫結果未定義，因此改成明確拒收並給出可讀的錯誤。同時補上一個檢查，擋掉把 4 個 int8 塞在一個暫存器裡的 packed 片段，這類片段之前會產生型別錯誤的 LLVM IR。驗證包含新的 lit 測試、負向測試，以及一個在本機 RTX 3070 上實際執行的 tensor core 整合測試：它在修正前於同一行 abort，修正後印出正確的矩陣。
 
+### 13. 修正向量化器把 tensor 切片寫到錯誤位置的問題
+
+- [PR #221293](https://github.com/llvm/llvm-project/pull/221293)
+- 狀態：**已送出，review 中**（2026-09-05）
+- 修改範圍：MLIR Linalg vectorizer（tensor layout、vectorization）
+
+MLIR 的向量化器把 `tensor.insert_slice`（把一個小 tensor 放進大 tensor 的某個位置）轉成一次向量讀取加一次向量寫入。這個轉換只在「每個元素間距為 1、而且小 tensor 對到大 tensor 最內層的維度」時才和原本的語意相同，但程式碼完全沒檢查這兩個條件：帶間距的 insert 會被寫成連續的幾列，把 8×4 的 tensor 放進 8×1×4 的中間維度時只有第一列被保留。編譯器不報錯，程式輸出直接是錯的。
+
+同一個檔案裡較舊的 pad 專用 pattern 本來就有這兩個檢查，新的一般化版本漏掉了。我把檢查補回前置條件，並用 `getDroppedDims` 的配對方向證明「丟掉的維度全在最前面」正好等於「對到最內層維度」，所以既有能正確向量化的案例全部保留。驗證包含三個新的 lit 測試（兩個負向、一個正向）與完整的 MLIR 測試套件。
+
 ## 這些成果證明了什麼能力
 
 ### AI compiler 與數值正確性
@@ -228,7 +238,7 @@ MLIR 的 GPU dialect 定義了 15 種可以直接套在 tensor core 矩陣片段
 
 1. 推動兩個已 approve 的 PR（#215696、#221248）合併，讓正式 upstream 貢獻由 6 個增加到 8 個。
 2. 完成 #217892 的 review，並接著送出 AMDGPU 硬體路徑的對應修正。
-3. 推進 #221185、#221268 與 #221288 的 review。第二次掃描（GPU 轉換層＋Linalg 向量化）的結果在 `notes/gpu-linalg-patch-candidates.md`，下一題是 `tensor.insert_slice` 向量化對 rank-reducing／strided 產生錯 IR，再來是 `vector.contract` 混寬 extension 折疊過不了 verifier。
+3. 推進 #221185、#221268、#221288 與 #221293 的 review。第二次掃描（GPU 轉換層＋Linalg 向量化）的結果在 `notes/gpu-linalg-patch-candidates.md`，下一題是 `vector.contract` 混寬 extension 折疊過不了 verifier，再來是 SPIR-V compute 路徑的轉置 MMA。
 4. 把目前用過的枚舉與語意驗證方法整理成自動化工具，用來系統性尋找更多 compiler correctness bug。
 
 ## 一句話總結
