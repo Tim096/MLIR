@@ -5,11 +5,11 @@
 
 ## 結論先看
 
-我目前向 LLVM 官方專案提出過 **12 個程式碼修改**：
+我目前向 LLVM 官方專案提出過 **14 個程式碼修改**：
 
 - **6 個已正式合併**，成為 LLVM／MLIR 的一部分。
 - **2 個已通過 maintainer review**，測試也全部通過，正在等待合併。
-- **4 個正在 review**：一個處理不同硬體轉換路徑對 MXFP scale 的解讀分歧，一個補上 2-bit 量化的向量截斷重寫，一個修正向量化時把會越界的讀寫標成安全的判斷，一個修正 GPU tensor core 的 matmul 後面接減法或取負時編譯器直接崩潰的問題。
+- **6 個正在 review**：一個處理不同硬體轉換路徑對 MXFP scale 的解讀分歧，一個補上 2-bit 量化的向量截斷重寫，一個修正向量化時把會越界的讀寫標成安全的判斷，一個修正 GPU tensor core 的 matmul 後面接減法或取負時編譯器直接崩潰的問題，一個修正向量化器把 tensor 切片寫到錯誤位置的問題，一個修正混合精度矩陣乘法折疊產生不合法 IR 的問題。
 - 另外提出過 **2 個技術問題報告**；其中 1 個已由我自己修好並合併。
 
 這些工作主要處理 AI compiler 在量化、向量運算和數值轉換時可能遇到的錯誤，包括：
@@ -25,7 +25,7 @@
 |---|---:|---|
 | 已合併進 LLVM | **6** | FP8、MXFP 常數最佳化、整數邊界、Vector mask、LLVM 浮點核心 |
 | 已通過 review | **2** | 跨後端整數正確性、GPU MMA 轉置 store |
-| Review 中 | **5** | MXFP scale 語意統一、2-bit 向量截斷、向量化 in_bounds 越界判斷、tensor core elementwise epilogue 崩潰、insert_slice 向量化寫錯位置 |
+| Review 中 | **6** | MXFP scale 語意統一、2-bit 向量截斷、向量化 in_bounds 越界判斷、tensor core elementwise epilogue 崩潰、insert_slice 向量化寫錯位置、混合精度 contract 折疊 |
 | 技術 Issue | **2** | 浮點 crash、MXFP 不同 lowering 結果不一致 |
 
 ## 已正式合併的 6 項貢獻
@@ -119,7 +119,7 @@ AI compiler 常用 mask 表示「只處理向量中的部分元素」，例如�
 
 這表示同一份模型或程式，可能因選擇不同 backend 而得到不同答案。我把 Index、Affine、LLVM、SPIR-V 與數值範圍分析的相關實作統一成相同的正確演算法。
 
-## 正在 review 的 5 項貢獻
+## 正在 review 的 6 項貢獻
 
 ### 8. 同一個 MXFP 操作經過不同 lowering，可能算出不同答案
 
@@ -189,6 +189,16 @@ MLIR 的向量化器把 `tensor.insert_slice`（把一個小 tensor 放進大 te
 
 同一個檔案裡較舊的 pad 專用 pattern 本來就有這兩個檢查，新的一般化版本漏掉了。我把檢查補回前置條件，並用 `getDroppedDims` 的配對方向證明「丟掉的維度全在最前面」正好等於「對到最內層維度」，所以既有能正確向量化的案例全部保留。驗證包含三個新的 lit 測試（兩個負向、一個正向）與完整的 MLIR 測試套件。
 
+### 14. 修正混合精度矩陣乘法折疊產生不合法 IR 的問題
+
+- [PR #221298](https://github.com/llvm/llvm-project/pull/221298)
+- 狀態：**已送出，review 中**（2026-09-05）
+- 修改範圍：MLIR Vector dialect transforms（vectorization、mixed precision）
+
+MLIR 有一個最佳化會把矩陣乘法兩個輸入上的型別擴展（例如 f16 擴成 f32）折進 `vector.contract`，讓 GPU tensor core 直接用混合精度指令運算。這個最佳化只檢查兩邊「都有擴展」，沒檢查兩邊是從同一種型別擴展出來的：一邊從 i8、另一邊從 i16 擴展時，折疊後的 `vector.contract` 兩個輸入型別不同，違反 op 本身的定義，整個 pass 直接失敗。f16 與 bf16 混用也一樣。
+
+我補上一個來源型別的比較，不一致就不折疊、保留原本的擴展。比較的粒度對齊 `vector.contract` verifier 的實際要求（只要求 element type 相同，形狀與 scalable 可以不同），所以既有能折疊的案例全部保留。驗證包含兩個新的負向 lit 測試與完整的 MLIR 測試套件。
+
 ## 這些成果證明了什麼能力
 
 ### AI compiler 與數值正確性
@@ -238,7 +248,7 @@ MLIR 的向量化器把 `tensor.insert_slice`（把一個小 tensor 放進大 te
 
 1. 推動兩個已 approve 的 PR（#215696、#221248）合併，讓正式 upstream 貢獻由 6 個增加到 8 個。
 2. 完成 #217892 的 review，並接著送出 AMDGPU 硬體路徑的對應修正。
-3. 推進 #221185、#221268、#221288 與 #221293 的 review。第二次掃描（GPU 轉換層＋Linalg 向量化）的結果在 `notes/gpu-linalg-patch-candidates.md`，下一題是 `vector.contract` 混寬 extension 折疊過不了 verifier，再來是 SPIR-V compute 路徑的轉置 MMA。
+3. 推進 #221185、#221268、#221288、#221293 與 #221298 的 review。第二次掃描（GPU 轉換層＋Linalg 向量化）的結果在 `notes/gpu-linalg-patch-candidates.md`，下一題是 SPIR-V compute 路徑的轉置 MMA。
 4. 把目前用過的枚舉與語意驗證方法整理成自動化工具，用來系統性尋找更多 compiler correctness bug。
 
 ## 一句話總結

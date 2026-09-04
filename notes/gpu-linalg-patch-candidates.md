@@ -41,7 +41,7 @@ SPIR-V 側 12 種都有。`extf`／`truncf` 依 PTX ISA 不可能做（f16↔f32
 - 完整：write 用 `getDroppedDims()` 建 permutation map（`createWriteOrMaskedWrite` 已有收 map 的版本），vecShape 的 dynamic 分支改查對應的 dest dim，FIXME 真的消掉。~60 行，既有測試輸出不變。
 作者 Andrzej Warzyński（banach-space，#122927，2025-02），他也是 #221268 的 reviewer。
 
-### V-1. `FoldArithExtIntoContractionOp` 兩側 ext 來源型別不同時產生過不了 verifier 的 `vector.contract` 🥈
+### V-1. `FoldArithExtIntoContractionOp` 兩側 ext 來源型別不同時產生過不了 verifier 的 `vector.contract` 🥈 → ✅ 已送出 [#221298](https://github.com/llvm/llvm-project/pull/221298)（2026-09-05）
 
 `Vector/Transforms/VectorTransforms.cpp:1913`。只檢查 `lhsDefOp`／`rhsDefOp` 存在，沒比較它們 operand 的型別。
 `extsi i8→i32` 配 `extsi i16→i32` 餵進去 → `'vector.contract' op failed to verify that lhs and rhs have same element type`（重現：`--test-fold-arith-extf-into-vector-contract-patterns`）。

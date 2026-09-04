@@ -159,6 +159,7 @@ GitHub 上有上萬個，看到的第一反應是「他做完官方教學了」�
 | **2026-09-04** | **GPU codegen 的 patch 一律在本機 GPU 上真的跑過再送**；為此在 WSL2 裝了 CUDA redist 並把 build 打開 CUDA runner ＋ tensor core 整合測試 | 追 NVVM IR 裡的屬性只能證明「屬性有傳下去」，證明不了硬體真的照那個 layout 存。#221248 的整合測試在 RTX 3070 上印出 B = 2·Aᵀ，才是 reviewer 一眼能信的證據；送出當天就被 approve |
 | **2026-09-04** | **等 review 期間不空等：多個 PR 並行**，每題獨立分支、獨立基準 commit；上游兩週沒回就 rebase 到當天 main、回掉所有 nit、再各 ping 一次（帶新資訊） | 08-21 → 09-04 三個 PR 兩週零回應。單線等待會讓整個計畫的節奏被 reviewer 的排程綁死。09-04 一次 rebase ＋ ping 之後 #215123 當天 merge、#221248 當天 approve，證明「帶新資訊的提醒」有效，而並行讓等待期仍有產出 |
 | **2026-09-05** | **靜默錯值的題目先止血、再談完整支援**：能用前置條件擋掉的就先擋（#221293 的 `insert_slice` 只加兩個 bail），完整支援另開一題；bug fix 不順手清 dead code | 完整修法要動另一個 PR（#221268）正在改的 helper，會撞；而刪 dead code 會讓五個既有測試的 CHECK 位移，reviewer 要多看一倍的 diff。小而對的 PR 當天就能 approve，這是 09-04 之後的實證 |
+| **2026-09-05** | **review 空檔用小題填**：等 review 的時間拿來送 8 行的 verifier 修正（#221298），不開新的大題 | 一天內送了四個 PR，reviewer 多半是同一批人（banach-space、dcaballe）；小題審得快、也讓他們一次看完，比堆一個大 PR 在隊伍裡等更有效 |
 
 ---
 

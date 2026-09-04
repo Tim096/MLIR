@@ -1,0 +1,1 @@
+@raikonenfnu @banach-space @dcaballe this adds the missing source-type check to the pattern from #96593, so an `extsi` from i8 next to an `extsi` from i16 (or `extf` from f16 next to bf16) no longer produces a `vector.contract` that fails the verifier. Would you mind taking a look when you have a moment? Thanks.

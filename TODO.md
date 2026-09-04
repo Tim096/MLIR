@@ -15,7 +15,7 @@
 
 ## 一句話現況
 
-**六個 commit 已進 upstream（#215123 09-04 中午 merge）。七個 open PR：#215696 與 #221248 已 approve 等人按 merge，#217892 在 review，#221185（i2 trunci）09-04 送、#221268（`in_bounds` 要看索引）、#221288（WMMA elementwise 降 NVVM 崩潰）與 #221293（`insert_slice` 向量化前置條件）09-05 送。**
+**六個 commit 已進 upstream（#215123 09-04 中午 merge）。八個 open PR：#215696 與 #221248 已 approve 等人按 merge，#217892 在 review，#221185（i2 trunci）09-04 送、#221268（`in_bounds` 要看索引）、#221288（WMMA elementwise 降 NVVM 崩潰）、#221293（`insert_slice` 向量化前置條件）與 #221298（ext 折進 `vector.contract` 要同來源型別）09-05 送。**
 **08-21 → 09-04 兩週三個 PR 都沒人回，09-04 全部 rebase 到當天 main、回掉 krzysz00 的 nit，再各 ping 一次；#215123 當天就進了，#221248 送出當天就被 approve。**
 **⚠️ 原則不變：已 approve 未 merge 就禮貌 ping，每次都要帶新資訊。**
 
@@ -32,8 +32,23 @@
 | [#221185](https://github.com/llvm/llvm-project/pull/221185) | M2-a：`arith.trunci` 到 `i2` 的 sub-byte 重寫（第二個 vector patch） | 🆕 **2026-09-04 送出**，head `a00b482bb9bc`，reviewer `dcaballe` | 跑中 |
 | [#221248](https://github.com/llvm/llvm-project/pull/221248) | M2-b：轉置的 `transfer_write` → `subgroup_mma_store_matrix ... transpose`（第一個 GPU codegen patch） | ✅ **`mplatings` 09-04 15:54 APPROVED**（"LGTM"，送出當天、ping 後一小時內）。head `d3103c5cda5e`。沒 commit 權限，等人按 merge | 全綠 |
 | [#221268](https://github.com/llvm/llvm-project/pull/221268) | M2-c：`createReadOrMaskedRead`／`Write` 推導 `in_bounds` 要看索引（修 `affine-super-vectorize` 標錯 `true`） | 🆕 **2026-09-05 送出**，head `9dbb2ccb28a9`（base `e33e88551902`），4 個檔案 +189/−35。CODEOWNERS 自動指派 `banach-space`、`nicolasvasilache`、`dcaballe`、`Groverkss`；留言（5543300681）另點名 `FedericoBruzzone`（#201180 作者） | 跑中 |
-| [#221288](https://github.com/llvm/llvm-project/pull/221288) | M2-d：`gpu.subgroup_mma_elementwise` 降 NVVM——15 種運算 10 種 `llvm_unreachable`，補 8 種、依 PTX ISA 拒收 `extf`／`truncf`、擋 packed fragment（第二個 GPU codegen patch） | 🆕 **2026-09-05 送出**，head `704d5b9c54b2`（base `c7ba46e37d78`），4 個檔案 +233/−12。自動指派 `fabianmcg`；留言（5543974824）另點名 `grypp`、`kuhar`、`simpel01`（#182499 作者） | 跑中 |
-| [#221293](https://github.com/llvm/llvm-project/pull/221293) | L-1：`tensor.insert_slice` 向量化——前置條件沒查 stride 與 rank-reducing 丟掉哪一維，strided／中間維度的 insert 被寫到錯的位置；加兩個 bail（第一個 Linalg patch） | 🆕 **2026-09-05 送出**，head `ae1f85cbb9d0`（base `08d499665a14`），3 個檔案 +88/−4。CODEOWNERS 自動指派 `banach-space`、`nicolasvasilache`、`dcaballe`、`Groverkss`；留言（5544240776）點名 `banach-space`（#122927 作者）、`hanhanW` | 跑中 |
+| [#221288](https://github.com/llvm/llvm-project/pull/221288) | M2-d：`gpu.subgroup_mma_elementwise` 降 NVVM——15 種運算 10 種 `llvm_unreachable`，補 8 種、依 PTX ISA 拒收 `extf`／`truncf`、擋 packed fragment（第二個 GPU codegen patch） | 🆕 **2026-09-05 送出**，head `704d5b9c54b2`（base `c7ba46e37d78`），4 個檔案 +233/−12。自動指派 `fabianmcg`；留言（5543974824）另點名 `grypp`、`kuhar`、`simpel01`（#182499 作者） | 全綠 |
+| [#221293](https://github.com/llvm/llvm-project/pull/221293) | L-1：`tensor.insert_slice` 向量化——前置條件沒查 stride 與 rank-reducing 丟掉哪一維，strided／中間維度的 insert 被寫到錯的位置；加兩個 bail（第一個 Linalg patch） | 🆕 **2026-09-05 送出**，head `ae1f85cbb9d0`（base `08d499665a14`），3 個檔案 +88/−4。CODEOWNERS 自動指派 `banach-space`、`nicolasvasilache`、`dcaballe`、`Groverkss`；留言（5544240776）點名 `banach-space`（#122927 作者）、`hanhanW` | Linux／Windows 過，AArch64 跑中 |
+| [#221298](https://github.com/llvm/llvm-project/pull/221298) | V-1：`FoldArithExtIntoContractionOp` 只查兩邊都是 ext、沒查來源型別，`extsi i8`＋`extsi i16`（或 `extf f16`＋`bf16`）折出過不了 verifier 的 `vector.contract`；補一個來源 element type 比較（第三個 vector patch） | 🆕 **2026-09-05 送出**，head `922af2916947`（base `f6a369fa4a57`），2 個檔案 +55/−0。CODEOWNERS 自動指派 `banach-space`、`nicolasvasilache`、`dcaballe`；留言（5544373520）點名 `raikonenfnu`（#96593 作者）、`banach-space`、`dcaballe` | 跑中 |
+
+### 🔧 2026-09-05：第九個 open PR——ext 折進 `vector.contract` 要同來源型別（分支 `vector-fold-ext-contract-same-type`）
+
+`notes/gpu-linalg-patch-candidates.md` 的 V-1，填充題。`FoldArithExtIntoContractionOp`（`9a795f0c59b1` 加、#96593 template 化成也吃 `extsi`）
+只檢查 contract 兩個 operand 都來自同一種 ext op，沒比較兩個 ext 的來源 element type；
+`extsi i8→i32` 配 `extsi i16→i32` 一折，新的 contract 直接拿 i8／i16 當 lhs／rhs，`'vector.contract' op failed to verify that lhs and rhs have same element type`，`extf f16`／`bf16` 同樣。
+修法是在 `replaceOpWithNewOp` 前用 `getElementTypeOrSelf` 比兩邊 `getIn()` 的 element type，不同就 `notifyMatchFailure`——只比 element type 是因為 verifier 的要求就只有這一項（shape、scalable 本來就可以不同）。
+
+驗證：兩個重現案例改動後保留 ext、contract 不變；`Dialect/Vector`＋`Conversion/VectorToGPU`＋`transform-op-vectorize` 105 個 lit 全過；check-mlir 4218 過／16 失敗（與基準同一組環境失敗）。
+答辯筆記 [`notes/vector-fold-ext-contract-same-type.md`](notes/vector-fold-ext-contract-same-type.md)，PR 描述稿 `patches/vector-fold-ext-contract-same-type-pr-body.md`，ping 稿 `patches/221298-reviewer-ping.md`。
+
+**已送出：[PR #221298](https://github.com/llvm/llvm-project/pull/221298)。第九個 open PR，8 行程式 ＋ 47 行測試。**
+
+**下一題**：GPU-2（SPIR-V 靜默丟掉 `subgroup_mma_compute` 的 `a_transpose`／`b_transpose`）。
 
 ### 🔧 2026-09-05：第八個 open PR——`insert_slice` 向量化的前置條件（分支 `linalg-insert-slice-vectorize-precondition`）
 
@@ -50,7 +65,7 @@
 
 **已送出：[PR #221293](https://github.com/llvm/llvm-project/pull/221293)。第八個 open PR，第一個 Linalg patch。**
 
-**下一題**：V-1（`FoldArithExtIntoContractionOp` 混寬 ext 過不了 verifier，~12 行）；之後 GPU-2（SPIR-V compute 路徑轉置）。
+**下一題**：~~V-1~~ → 已送出 #221298；之後 GPU-2（SPIR-V compute 路徑轉置）。
 
 ### 🔧 2026-09-05：第七個 open PR——WMMA elementwise 降 NVVM 崩潰（分支 `gpu-wmma-elementwise-nvvm`）
 
@@ -1561,11 +1576,11 @@ CHECK 反映改動前行為；第二個 commit 才是修正 + CHECK 的 diff。
 
 見下面「⭐ 題目清單」的 **M1-b**。
 
-### 5. 2026-09-05 現況：等五個 open PR，下一題要重新掃描
+### 5. 2026-09-05 現況：等八個 open PR
 
 - 等 merge：#215696（kuhar approve，第二人未出現）、#221248（mplatings approve）。**已 approve 未 merge 就禮貌 ping，要帶新資訊。**
-- 等 review：#217892（krzysz00）、#221185（dcaballe）、#221268（banach-space／dcaballe／FedericoBruzzone）、#221288（fabianmcg／grypp）、#221293（banach-space／hanhanW）。09-05 實查前六個都沒有新 review。
-- 第二次掃描已做完 → `notes/gpu-linalg-patch-candidates.md`；GPU-1 已送出為 #221288，L-1 已送出為 #221293。**下一題：V-1（`FoldArithExtIntoContractionOp`），再來 GPU-2。**
+- 等 review：#217892（krzysz00）、#221185（dcaballe）、#221268（banach-space／dcaballe／FedericoBruzzone）、#221288（fabianmcg／grypp）、#221293（banach-space／hanhanW）、#221298（raikonenfnu／banach-space／dcaballe）。09-05 實查前七個都沒有新 review。
+- 第二次掃描已做完 → `notes/gpu-linalg-patch-candidates.md`；GPU-1 已送出為 #221288，L-1 已送出為 #221293，V-1 已送出為 #221298。**下一題：GPU-2（SPIR-V compute 轉置屬性）。**
 
 ---
 
