@@ -1,14 +1,15 @@
 # LLVM / MLIR 貢獻報告
 
-> 統計日期：2026-08-21  
+> 統計日期：2026-09-04  
 > 貢獻者：Hung-Kuan Tseng（GitHub：[`Tim096`](https://github.com/Tim096)）
 
 ## 結論先看
 
-我目前向 LLVM 官方專案提出過 **7 個程式碼修改**：
+我目前向 LLVM 官方專案提出過 **9 個程式碼修改**：
 
 - **5 個已正式合併**，成為 LLVM／MLIR 的一部分。
 - **2 個已通過 maintainer review**，測試也全部通過，正在等待合併。
+- **2 個正在 review**：一個處理不同硬體轉換路徑對 MXFP scale 的解讀分歧，一個補上 2-bit 量化的向量截斷重寫。
 - 另外提出過 **2 個技術問題報告**；其中 1 個已由我自己修好並合併。
 
 這些工作主要處理 AI compiler 在量化、向量運算和數值轉換時可能遇到的錯誤，包括：
@@ -24,6 +25,7 @@
 |---|---:|---|
 | 已合併進 LLVM | **5** | FP8、整數邊界、Vector mask、LLVM 浮點核心 |
 | 已通過 review | **2** | MXFP 常數最佳化、跨後端整數正確性 |
+| Review 中 | **2** | MXFP scale 語意統一、2-bit 向量截斷 |
 | 技術 Issue | **2** | 浮點 crash、MXFP 不同 lowering 結果不一致 |
 
 ## 已正式合併的 5 項貢獻
@@ -97,7 +99,7 @@ AI compiler 常用 mask 表示「只處理向量中的部分元素」，例如�
 ### 6. 讓 MXFP 量化操作可以提前算出常數結果
 
 - [PR #215123](https://github.com/llvm/llvm-project/pull/215123)
-- 狀態：**已 approve、測試全綠、可以合併**
+- 狀態：**已 approve、測試全綠、可以合併**（2026-09-04 已 rebase 到最新 main，approve 保留）
 
 如果 MXFP scaling 操作的輸入和 scale 都是常數，MLIR 原本仍會把運算保留到後面的硬體轉換階段。
 
@@ -108,7 +110,7 @@ AI compiler 常用 mask 表示「只處理向量中的部分元素」，例如�
 ### 7. 統一不同 compiler backend 的 ceiling division 結果
 
 - [PR #215696](https://github.com/llvm/llvm-project/pull/215696)
-- 狀態：**已 approve、測試全綠、可以合併；等待第二位 maintainer 確認**
+- 狀態：**已 approve、測試全綠、可以合併；等待第二位 maintainer 確認**（2026-09-04 已 rebase 到最新 main，approve 保留）
 
 我在處理前面的極端整數問題時，進一步發現相同的 ceiling division 在不同轉換路徑中並不一致：
 
@@ -117,25 +119,35 @@ AI compiler 常用 mask 表示「只處理向量中的部分元素」，例如�
 
 這表示同一份模型或程式，可能因選擇不同 backend 而得到不同答案。我把 Index、Affine、LLVM、SPIR-V 與數值範圍分析的相關實作統一成相同的正確演算法。
 
-## 正在推進的代表性問題
+## 正在 review 的 2 項貢獻
 
-### 同一個 MXFP 操作經過不同 lowering，可能算出不同答案
+### 8. 同一個 MXFP 操作經過不同 lowering，可能算出不同答案
 
-- [Issue #215295](https://github.com/llvm/llvm-project/issues/215295)
-- 本地 patch：`arith-scaling-value-semantics`
+- [Issue #215295](https://github.com/llvm/llvm-project/issues/215295) → [PR #217892](https://github.com/llvm/llvm-project/pull/217892)
+- 狀態：**已送出，review 中**（2026-08-21 送出；maintainer 已回覆一輪，2026-09-04 已處理）
 
 我發現 MLIR 的一般轉換流程與 AMDGPU 流程，對非 2 次方的 scale 有不同解讀。簡單來說，同一個 MXFP 操作可能因為 compiler 選了不同的硬體轉換路徑，而使用不同 scale，最後得到不同數值。
 
 這個問題已促成多位 LLVM maintainer 討論，並進一步查閱 AMD CDNA5 ISA，確認真實硬體也支援非 E8M0 的 scale。
 
-我已經完成本地修正：
+我已送出修正：
 
 - 讓一般轉換流程使用 scale 的實際數值；
 - 更新操作文件；
 - 補上原本缺少的 FP8 scale 測試與型別邊界檢查；
-- 完整 MLIR 測試結果為 **3905 passed、0 failed**。
+- 完整 MLIR 測試結果為 **3965 passed、0 failed**。
 
-目前等待 maintainer 對語意正式確認後送出 PR。這項工作完整涵蓋了：發現不同 backend 結果不一致、提出 Issue、查閱硬體規格、參與語意討論、完成實作與驗證。
+Review 中 maintainer 進一步指出 AMD 硬體指令只讀 scale 的 sign 與 exponent bits，我據此提出後續 patch 的範圍：只在 scale 格式與硬體語意一致時才使用硬體指令。這項工作完整涵蓋了：發現不同 backend 結果不一致、提出 Issue、查閱硬體規格、參與語意討論、完成實作與驗證。
+
+### 9. 讓 2-bit 量化的向量截斷也走高效路徑
+
+- [PR #221185](https://github.com/llvm/llvm-project/pull/221185)
+- 狀態：**已送出，review 中**（2026-09-04）
+- 修改範圍：MLIR Vector
+
+低位元量化模型會把權重壓成 2-bit 或 4-bit。MLIR 原本只對 4-bit 的向量截斷做了高效重寫，2-bit 直接放棄，交給 LLVM 自己拼湊；而反方向的 2-bit 解壓早在 2025 年就有人補上。
+
+我補上 2-bit 截斷這一半，把每四個 byte 用兩層 deinterleave 分組、遮罩、移位後合併成一個 byte。驗證方式是把全部 **256 種 byte 值**同時走重寫路徑與原始路徑，用 `mlir-runner` 印出結果逐位比對，並補上整合測試。
 
 ## 這些成果證明了什麼能力
 
@@ -174,7 +186,7 @@ AI compiler 常用 mask 表示「只處理向量中的部分元素」，例如�
 
 ### 30 秒自我介紹
 
-我是 LLVM／MLIR upstream contributor，目前有 5 個修改已正式合併，另外 2 個已通過 review。我的工作主要處理 AI compiler 的 FP8／MXFP 量化、向量 lowering 和數值正確性，例如修正 NaN 被轉成 Infinity、不同 backend 算出不同結果，以及極端整數 overflow。我也會用 Alive2、全輸入枚舉和 regression tests 驗證修正，而不只是讓一般測試通過。
+我是 LLVM／MLIR upstream contributor，目前有 5 個修改已正式合併，另外 2 個已通過 review，2 個在 review 中。我的工作主要處理 AI compiler 的 FP8／MXFP 量化、向量 lowering 和數值正確性，例如修正 NaN 被轉成 Infinity、不同 backend 算出不同結果，以及極端整數 overflow。我也會用 Alive2、全輸入枚舉和 regression tests 驗證修正，而不只是讓一般測試通過。
 
 ### 履歷版本
 
@@ -185,8 +197,8 @@ AI compiler 常用 mask 表示「只處理向量中的部分元素」，例如�
 ## 下一步
 
 1. 推動兩個已 approve 的 PR 合併，讓正式 upstream 貢獻由 5 個增加到 7 個。
-2. 在 MXFP scale 語意確認後，送出已完成的不同 lowering 一致性修正。
-3. 接著增加 Vector 相關貢獻，再逐步進入 Linalg／GPU。
+2. 完成 #217892 的 review，並接著送出 AMDGPU 硬體路徑的對應修正。
+3. 推進 #221185 的 review；下一題是 `VectorToGPU` 轉置 store（候選清單第 2 名），開始接觸 GPU codegen。
 4. 把目前用過的枚舉與語意驗證方法整理成自動化工具，用來系統性尋找更多 compiler correctness bug。
 
 ## 一句話總結

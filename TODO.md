@@ -9,25 +9,83 @@
 >
 > 新 session 開場建議直接說：「讀 Goal.md 和 TODO.md，然後接續」。
 
-最後更新：2026-08-21
+最後更新：2026-09-04
 
 ---
 
 ## 一句話現況
 
-**五個 commit 已進 upstream。三個 open PR：兩個已 approve 等人按 merge，一個 2026-08-21 新送。**
-**#215123 tgymnich 08-17 approve（要求 rebase，已做）、#215696 kuhar 08-14 approve 等第二個人。**
-**⚠️ 新原則：已 approve 未 merge 就禮貌 ping 一次提醒（2026-08-17 本人指示，已記進長期記憶）。**
+**五個 commit 已進 upstream。四個 open PR：兩個已 approve 等人按 merge，#217892 在 review，#221185（i2 trunci）09-04 新送。**
+**08-21 → 09-04 兩週三個 PR 都沒人回，09-04 全部 rebase 到當天 main、回掉 krzysz00 的 nit，再各 ping 一次。**
+**⚠️ 原則不變：已 approve 未 merge 就禮貌 ping，每次都要帶新資訊。**
 
-| PR | 內容 | 狀態（2026-08-18 實查） | CI |
+| PR | 內容 | 狀態（2026-09-04 實查） | CI |
 |---|---|---|---|
 | [#214622](https://github.com/llvm/llvm-project/pull/214622) | M0：`AtomicRMWKind` switch 窮盡（NFC） | ✅ **已 MERGE**（2026-08-09 15:03，merge commit `78e17e70bd52`） | — |
 | [#214919](https://github.com/llvm/llvm-project/pull/214919) | M1-b0：`f8E8M0FNU` NaN 被折成 Inf | ✅ **已 MERGE**（2026-08-10 11:09 UTC，merge commit `794aa0fd923a`） | 全綠 |
 | [#214637](https://github.com/llvm/llvm-project/pull/214637) | M1-a：`ceildivsi` MININT 折疊 | ✅ **已 MERGE**（2026-08-12 13:39 UTC，`kuhar` 代 merge，squash commit `2a0c335d4538`） | 全綠 |
-| [#215123](https://github.com/llvm/llvm-project/pull/215123) | M1-b：`scaling_extf`/`scaling_truncf` 常數折疊 | ✅ **`tgymnich` 2026-08-17 09:41 UTC APPROVED**（「LGTM. Still needs a rebase on main」）。衝突是**我們自己的 #216056** 造成，已 rebase 到 `ecdcdf0577c1`，新 head **`96dfbf939686`**（08-18 02:28 已推、approve 未消失） | 全綠 |
+| [#215123](https://github.com/llvm/llvm-project/pull/215123) | M1-b：`scaling_extf`/`scaling_truncf` 常數折疊 | ✅ **`tgymnich` 08-17 APPROVED**，approve 後無人 merge。09-04 純 rebase 到 `eac210e8d174`，head **`7f575d426089`**，approve 未消失 | 全綠 |
 | [#215318](https://github.com/llvm/llvm-project/pull/215318) | M1-d：transfer permutation lowering 支援 masked op | ✅ **已 MERGE**（2026-08-13 16:20 UTC，`banach-space` 代 merge，squash commit `1ccdf48548ed`）。**第一個 vector commit** | 全綠 |
-| [#215696](https://github.com/llvm/llvm-project/pull/215696) | 從 #214637 拆出：`ceildivs` INT_MIN 在 fold／兩個 index lowering／affine 展開／inference 全部一致 | ✅ **`kuhar` 2026-08-14 14:58 APPROVED**，但同時說想要第二個 approval，點名 `@krzysz00`（**4 天未回，但他 08-17 在 #215295 是活的**）。head `358a393a`、仍 `clean` | 全綠 |
+| [#215696](https://github.com/llvm/llvm-project/pull/215696) | 從 #214637 拆出：`ceildivs` INT_MIN 在 fold／兩個 index lowering／affine 展開／inference 全部一致 | ✅ **`kuhar` 08-14 APPROVED**，第二人（點名 `krzysz00`）三週未出現。09-04 純 rebase 到 `eac210e8d174`，head **`b55fb1c4d53b`**，approve 未消失 | 全綠 |
 | [#216056](https://github.com/llvm/llvm-project/pull/216056) | 🆕 `APFloat::convert` 不回報 sign／zero 失真（含 crash） | ✅ **已 MERGE**（2026-08-17 09:21 UTC，`tgymnich` 代 merge，squash commit `898b0188d901`）。**第五個 commit，也是第一個不在 MLIR 而在 `llvm/lib/Support` 的**。issue #215445 同時自動關閉 | 全綠 |
+| [#217892](https://github.com/llvm/llvm-project/pull/217892) | M1-e：`scaling_extf`／`scaling_truncf` 展開改用 scale 的值（`in / scale`） | 🔄 **review 中**。krzysz00 08-21 一個 nit ＋ 一則硬體補充，09-04 已回；head **`f2ab962761d9`**（base `eac210e8d174`，rebase 過 #216653） | 全綠 |
+| [#221185](https://github.com/llvm/llvm-project/pull/221185) | M2-a：`arith.trunci` 到 `i2` 的 sub-byte 重寫（第二個 vector patch） | 🆕 **2026-09-04 送出**，head `a00b482bb9bc`，reviewer `dcaballe` | 跑中 |
+
+### 📌 2026-09-04：兩週沒人回，三個 PR 全部 rebase，回 nit，再 ping
+
+**先實查，不是憑感覺**：08-21 之後三個 PR 一則回應都沒有；三個 reviewer 都活躍
+（`gh api users/<u>/events/public`），純粹是排不進優先序。唯一的動靜是
+**krzysz00 08-21 在 #217892 留了兩則**（我當天沒看到）：
+
+| 留言 | 內容 | 09-04 處理 |
+|---|---|---|
+| inline [3832259652](https://github.com/llvm/llvm-project/pull/217892#discussion_r3832259652) | nit：測試別寫死 `%arg0`，改在 `SCHECK-LABEL` 下用 `SCHECK-SAME` 抓引數 | 13 個本 patch 碰到的測試改成 `SCHECK-SAME: %[[ARG0:.+]]: ty, %[[ARG1:.+]]: ty`；沒碰的 `f8E8M0FNU` 測試留原樣，diff 不擴大。回覆 [3932465013](https://github.com/llvm/llvm-project/pull/217892#discussion_r3932465013) |
+| top-level 5373010733 | `cvt.scalef32` 硬體讀的是 f32 scale 的 **bits 31:23**（sign＋exponent），尾數直接丟 | 承認這確定了 E5M3 scale 在 generic／硬體兩條路徑的**值**分歧；主張 follow-up 走 option 1（只對 `f8E8M0FNU` scale 或明確 `toward_zero` truncf 才用指令），除非他要放這個 PR。回覆 [5538147997](https://github.com/llvm/llvm-project/pull/217892#issuecomment-5538147997) |
+
+**三個 rebase（都先開 `backup/*-prerebase-0904`）**：
+
+| PR | 舊 head → 新 head | 上游在這兩週動到的相關檔 | 衝突 |
+|---|---|---|---|
+| #217892 | `2b11b90c3675` → **`f2ab962761d9`** | #216653 在 `ExpandOps.cpp` **同一個位置**加了 F8E5M2／F8E4M3FN 四個 converter | add/add 一個：上游四個 converter 在前、我的 `castFloatValue` 在後，兩塊照序放 |
+| #215696 | `358a393a` → **`b55fb1c4d53b`** | `InferIntRangeCommon.cpp` 四個 NFC 搬動（#221070、#221081–#221083），都不在 `inferCeilDivS` | 無；4 個 patch-id 全同，證明是純 rebase |
+| #215123 | `96dfbf939686` → **`7f575d426089`** | `ArithOps.cpp` 兩次（#217031、#218324），都不靠近這個 folder | 無；純 rebase，clang-format 乾淨 |
+
+**驗證**：#217892 `check-mlir` **3965 passed / 0 failed**；#215696 相關 lit 7/7；
+#215123 重編 mlir-opt ＋ `canonicalize.mlir`／`expand-ops.mlir` PASS。
+三個 force-push 都用 `--force-with-lease=refs/heads/<b>:<舊 sha>`，兩個 approve 都留著
+（LLVM 不會因 force-push 撤 stale approval）。
+
+**ping**：稿子在 `patches/215123-second-ping.md`、`patches/215696-second-ping.md`，
+內文寫「premerge 在新 head 已綠」，**所以要等 CI 真的綠才貼**，不能先講。
+（#217892 不 ping，krzysz00 09-04 剛被回，換他。）
+
+| PR | premerge | ping |
+|---|---|---|
+| #215696 | 10 pass / 2 skipping | [5538865558](https://github.com/llvm/llvm-project/pull/215696#issuecomment-5538865558) |
+| #215123 | 10 pass / 2 skipping | [5539084402](https://github.com/llvm/llvm-project/pull/215123#issuecomment-5539084402) |
+
+**這輪踩到的工具問題**：
+- `gh pr view --json headRefOid` 不存在，要用 `gh api repos/llvm/llvm-project/pulls/N`。
+- 這版 git 的 `git merge-tree --write-tree` 直接 exit 128，不能乾跑合併，只能真 rebase 再看。
+- 同一個 rebase 過程中 `origin/main` 自己從 `46dabd2f3a82` 前進到 `eac210e8d174`（23 個 commit，有東西在自動 fetch），
+  所以 #215123 的 base 比另外兩個新，無害。
+- 只有一個 build dir，ninja／lit 在跑時不能 checkout 別的分支，三個 PR 只能串行。
+
+### 🔧 2026-09-04：下一題開工——`arith.trunci` 到 `i2`（分支 `vector-trunci-i2`）
+
+候選清單第一名（`notes/vector-patch-candidates.md`），動手前重驗：TODO 還在 `VectorEmulateNarrowType.cpp:2208`，
+08-21 之後該檔零 commit，open PR 搜 `trunci i2`／`"narrow type" i2` 無撞車。
+
+commit `a00b482bb9bc`（基準 `eac210e8d174`），3 個檔案：新 helper `rewriteI8ToI2Trunc`（兩層 deinterleave → mask → shift → or → bitcast）、
+拿掉 bail、lit 測試 4 個 case（no_match 翻正向）、整合測試加 `@ftrunc_i2`。
+答辯筆記 [`notes/vector-trunci-i2.md`](notes/vector-trunci-i2.md)，PR 描述稿 `patches/vector-trunci-i2-pr-body.md`。
+
+驗證：lit 130/130（Vector＋Arith）、整合測試兩條 RUN 手動跑 PASS（本機 build 的 `MLIR_INCLUDE_INTEGRATION_TESTS` 是 OFF，
+所以 check-mlir 不會跑它，要自己用 `mlir-runner` 跑）、**256 個 byte 值窮舉：重寫／不重寫／手算三者相同**。
+`check-mlir` **3965 passed / 0 failed**（617 unsupported、1 expectedly failed）。
+
+**已送出：[PR #221185](https://github.com/llvm/llvm-project/pull/221185)**（head `a00b482bb9bc`，base `543ac0371f32`），
+自動指派 reviewer `dcaballe`（i4 trunc 原作者，#82565）。**第四個 open PR。**
 
 ### 🔬 2026-08-21：派三個 agent，敵意 review 抓到三個真缺陷
 
