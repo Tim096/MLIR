@@ -15,7 +15,7 @@
 
 ## 一句話現況
 
-**六個 commit 已進 upstream（#215123 09-04 中午 merge）。五個 open PR：#215696 與 #221248 已 approve 等人按 merge，#217892 在 review，#221185（i2 trunci）09-04 送、#221268（`in_bounds` 要看索引）09-05 送。**
+**六個 commit 已進 upstream（#215123 09-04 中午 merge）。六個 open PR：#215696 與 #221248 已 approve 等人按 merge，#217892 在 review，#221185（i2 trunci）09-04 送、#221268（`in_bounds` 要看索引）與 #221288（WMMA elementwise 降 NVVM 崩潰）09-05 送。**
 **08-21 → 09-04 兩週三個 PR 都沒人回，09-04 全部 rebase 到當天 main、回掉 krzysz00 的 nit，再各 ping 一次；#215123 當天就進了，#221248 送出當天就被 approve。**
 **⚠️ 原則不變：已 approve 未 merge 就禮貌 ping，每次都要帶新資訊。**
 
@@ -32,6 +32,32 @@
 | [#221185](https://github.com/llvm/llvm-project/pull/221185) | M2-a：`arith.trunci` 到 `i2` 的 sub-byte 重寫（第二個 vector patch） | 🆕 **2026-09-04 送出**，head `a00b482bb9bc`，reviewer `dcaballe` | 跑中 |
 | [#221248](https://github.com/llvm/llvm-project/pull/221248) | M2-b：轉置的 `transfer_write` → `subgroup_mma_store_matrix ... transpose`（第一個 GPU codegen patch） | ✅ **`mplatings` 09-04 15:54 APPROVED**（"LGTM"，送出當天、ping 後一小時內）。head `d3103c5cda5e`。沒 commit 權限，等人按 merge | 全綠 |
 | [#221268](https://github.com/llvm/llvm-project/pull/221268) | M2-c：`createReadOrMaskedRead`／`Write` 推導 `in_bounds` 要看索引（修 `affine-super-vectorize` 標錯 `true`） | 🆕 **2026-09-05 送出**，head `9dbb2ccb28a9`（base `e33e88551902`），4 個檔案 +189/−35。CODEOWNERS 自動指派 `banach-space`、`nicolasvasilache`、`dcaballe`、`Groverkss`；留言（5543300681）另點名 `FedericoBruzzone`（#201180 作者） | 跑中 |
+| [#221288](https://github.com/llvm/llvm-project/pull/221288) | M2-d：`gpu.subgroup_mma_elementwise` 降 NVVM——15 種運算 10 種 `llvm_unreachable`，補 8 種、依 PTX ISA 拒收 `extf`／`truncf`、擋 packed fragment（第二個 GPU codegen patch） | 🆕 **2026-09-05 送出**，head `704d5b9c54b2`（base `c7ba46e37d78`），4 個檔案 +233/−12。自動指派 `fabianmcg`；留言（5543974824）另點名 `grypp`、`kuhar`、`simpel01`（#182499 作者） | 跑中 |
+
+### 🔧 2026-09-05：第七個 open PR——WMMA elementwise 降 NVVM 崩潰（分支 `gpu-wmma-elementwise-nvvm`）
+
+候選清單前三名送完後做的**第二次掃描**（GPU 轉換層 ＋ Linalg 向量化，兩路並行），結果在 [`notes/gpu-linalg-patch-candidates.md`](notes/gpu-linalg-patch-candidates.md)。
+GPU 那路第一名最硬：`WmmaOpsToNvvm.cpp:365` 的 `createScalarOp` 只有 5 個 case，`default: llvm_unreachable`，
+`gpu.subgroup_mma_elementwise` 另外 10 種（`addi`／`subf`／`subi`／`muli`／`divs`／`divu`／`negatef`／`negates`／`extf`／`truncf`）全部 abort（本機 rc=134 逐一實測）。
+`convert-vector-to-gpu` 會把 `arith.subf`／`negf`／`truncf`… 都轉成這個 op，所以 matmul ＋ bias 減法的 kernel 進 `-gpu-lower-to-nvvm-pipeline` 就崩；
+`vector-to-mma-ops.mlir` 的 `cast_f32_to_f16_write` 產出的 IR 餵 NVVM 就是這樣。SPIR-V 側 12 種都有。
+另一個症狀：`addf` 在 tf32 A-fragment 上產生 `llvm.fadd` on `i32`，verifier 報錯。
+
+**PTX ISA 兩條規則定了做法**（§9.7.15.4.1「Manipulating fragment contents」）：逐暫存器一致運算、順序不變 → 8 個算術運算可以做；
+「.f16 與 .f32 累加器 fragment 的轉換兩個方向都不支援，結果未定義」→ `extf`／`truncf` **不可能做**，改成 `notifyMatchFailure`（在建任何 op 之前，因為測試有 `allow-pattern-rollback=0`）。
+packed fragment（s8／u8／tf32 multiplicand 的暫存器是 `i32`）用 `getElementTypeOrSelf(registerType) != matrixType.getElementType()` 擋。
+`negates` 用 `0 - x`（LLVM 沒整數 neg）。沒動 VectorToGPU：它 target-agnostic，SPIR-V 路徑這兩個 op 是合法的。
+
+commit `704d5b9c54b2`（基準 `c7ba46e37d78`）。測試：`wmma-ops-to-nvvm.mlir` 加 f16 `subf`＋`negatef`、i32 六種整數運算；
+新檔 `gpu-to-nvvm-invalid-wmma-elementwise.mlir` 四個拒收案例；整合測試 `TensorCore/wmma-matmul-f16-elementwise.mlir`
+走 `convert-vector-to-gpu` → NVVM pipeline，A[i][j]=j、C[i][j]=i，算 `-(C - (A·A + C))`，**改動前同一行 abort，改動後 RTX 3070 印出每列 `[-0, 120, …, 1800]`**。
+驗證：GPUToNVVM／GPUToSPIRV／VectorToGPU／Dialect/GPU lit 全過；`check-mlir` **4220 passed / 16 failed**，16 個和基準完全相同（WSL2 環境）。
+答辯筆記 [`notes/gpu-wmma-elementwise-nvvm.md`](notes/gpu-wmma-elementwise-nvvm.md)，PR 描述稿 `patches/gpu-wmma-elementwise-nvvm-pr-body.md`，ping 稿 `patches/221288-reviewer-ping.md`。
+
+**已送出：[PR #221288](https://github.com/llvm/llvm-project/pull/221288)。第七個 open PR。** reviewer 人選：`fabianmcg`（GPU dialect，merge 了 fp64 extension）、`grypp`（NVVM CODEOWNER）、`kuhar`、`simpel01`。
+
+**下一題已定**：`notes/gpu-linalg-patch-candidates.md` 的 L-1（`tensor.insert_slice` 向量化對 rank-reducing／strided 產生錯 IR，三種錯法已重現），
+填充題 V-1（`FoldArithExtIntoContractionOp` 混寬 ext 過不了 verifier，~12 行）。
 
 ### 🔧 2026-09-05：第六個 open PR——`in_bounds` 推導要看索引（分支 `affine-vectorize-in-bounds-index`）
 
@@ -1520,9 +1546,8 @@ CHECK 反映改動前行為；第二個 commit 才是修正 + CHECK 的 diff。
 ### 5. 2026-09-05 現況：等五個 open PR，下一題要重新掃描
 
 - 等 merge：#215696（kuhar approve，第二人未出現）、#221248（mplatings approve）。**已 approve 未 merge 就禮貌 ping，要帶新資訊。**
-- 等 review：#217892（krzysz00）、#221185（dcaballe）、#221268（banach-space／dcaballe／FedericoBruzzone）。
-- `notes/vector-patch-candidates.md` 前三名都送了；第 4 名（tensor 上的 drop-unit-dims）預期設計辯論，第 5 名（strided gather）關鍵字弱。
-  **下一題先做一次新掃描**：範圍往路線的下一站走——`Linalg/Transforms/Vectorization.cpp`、`Conversion/VectorToGPU`、`NVGPU`、`GPUToNVVM`——仍用 §8.7 四關 ＋ 撞車查證。
+- 等 review：#217892（krzysz00）、#221185（dcaballe）、#221268（banach-space／dcaballe／FedericoBruzzone）、#221288（fabianmcg／grypp）。
+- 第二次掃描已做完 → `notes/gpu-linalg-patch-candidates.md`；GPU-1 已送出為 #221288。**下一題：L-1（`insert_slice` 向量化錯 IR），填充題 V-1。**
 
 ---
 

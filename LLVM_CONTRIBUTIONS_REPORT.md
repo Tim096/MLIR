@@ -5,11 +5,11 @@
 
 ## 結論先看
 
-我目前向 LLVM 官方專案提出過 **11 個程式碼修改**：
+我目前向 LLVM 官方專案提出過 **12 個程式碼修改**：
 
 - **6 個已正式合併**，成為 LLVM／MLIR 的一部分。
 - **2 個已通過 maintainer review**，測試也全部通過，正在等待合併。
-- **3 個正在 review**：一個處理不同硬體轉換路徑對 MXFP scale 的解讀分歧，一個補上 2-bit 量化的向量截斷重寫，一個修正向量化時把會越界的讀寫標成安全的判斷。
+- **4 個正在 review**：一個處理不同硬體轉換路徑對 MXFP scale 的解讀分歧，一個補上 2-bit 量化的向量截斷重寫，一個修正向量化時把會越界的讀寫標成安全的判斷，一個修正 GPU tensor core 的 matmul 後面接減法或取負時編譯器直接崩潰的問題。
 - 另外提出過 **2 個技術問題報告**；其中 1 個已由我自己修好並合併。
 
 這些工作主要處理 AI compiler 在量化、向量運算和數值轉換時可能遇到的錯誤，包括：
@@ -25,7 +25,7 @@
 |---|---:|---|
 | 已合併進 LLVM | **6** | FP8、MXFP 常數最佳化、整數邊界、Vector mask、LLVM 浮點核心 |
 | 已通過 review | **2** | 跨後端整數正確性、GPU MMA 轉置 store |
-| Review 中 | **3** | MXFP scale 語意統一、2-bit 向量截斷、向量化 in_bounds 越界判斷 |
+| Review 中 | **4** | MXFP scale 語意統一、2-bit 向量截斷、向量化 in_bounds 越界判斷、tensor core elementwise epilogue 崩潰 |
 | 技術 Issue | **2** | 浮點 crash、MXFP 不同 lowering 結果不一致 |
 
 ## 已正式合併的 6 項貢獻
@@ -119,7 +119,7 @@ AI compiler 常用 mask 表示「只處理向量中的部分元素」，例如�
 
 這表示同一份模型或程式，可能因選擇不同 backend 而得到不同答案。我把 Index、Affine、LLVM、SPIR-V 與數值範圍分析的相關實作統一成相同的正確演算法。
 
-## 正在 review 的 3 項貢獻
+## 正在 review 的 4 項貢獻
 
 ### 8. 同一個 MXFP 操作經過不同 lowering，可能算出不同答案
 
@@ -169,6 +169,16 @@ MLIR 的 affine 向量化在產生向量讀寫時，只要 memref 的維度能�
 
 我從數學上補齊了缺少的條件（索引必須是向量寬度的倍數），並用一個遞迴走訪常數、迴圈變數與 affine 運算的判斷實作它，讓 tiling 後的迴圈仍能被認出是對齊的，既有的最佳化結果不退化。這題原本是候選清單上的「清 TODO」，動手時發現是可重現的錯誤，並找到上游測試裡一個本來就期望錯誤結果的 CHECK。
 
+### 12. 修正 GPU tensor core 的 matmul 接上 elementwise 運算時編譯器直接崩潰
+
+- [PR #221288](https://github.com/llvm/llvm-project/pull/221288)
+- 狀態：**已送出，review 中**（2026-09-05）
+- 修改範圍：MLIR GPUToNVVM（GPU codegen、mixed precision）
+
+MLIR 的 GPU dialect 定義了 15 種可以直接套在 tensor core 矩陣片段上的 elementwise 運算，向量層會把 matmul 後面的減法、取負、型別轉換等都轉成它們。但降到 NVIDIA 後端的程式碼只實作了 5 種，其餘 10 種走到一行「不可能到達」的斷言，整個編譯器 abort；SPIR-V 後端則 12 種都有。
+
+我對照 PTX ISA 的規格分成兩類處理：8 種算術運算按規格允許的方式逐暫存器實作；f16 與 f32 之間的轉換在規格裡明寫結果未定義，因此改成明確拒收並給出可讀的錯誤。同時補上一個檢查，擋掉把 4 個 int8 塞在一個暫存器裡的 packed 片段，這類片段之前會產生型別錯誤的 LLVM IR。驗證包含新的 lit 測試、負向測試，以及一個在本機 RTX 3070 上實際執行的 tensor core 整合測試：它在修正前於同一行 abort，修正後印出正確的矩陣。
+
 ## 這些成果證明了什麼能力
 
 ### AI compiler 與數值正確性
@@ -206,7 +216,7 @@ MLIR 的 affine 向量化在產生向量讀寫時，只要 memref 的維度能�
 
 ### 30 秒自我介紹
 
-我是 LLVM／MLIR upstream contributor，目前有 6 個修改已正式合併，另外 2 個已通過 review，3 個在 review 中。我的工作主要處理 AI compiler 的 FP8／MXFP 量化、向量 lowering、GPU codegen 和數值正確性，例如修正 NaN 被轉成 Infinity、不同 backend 算出不同結果，以及極端整數 overflow。我也會用 Alive2、全輸入枚舉和 regression tests 驗證修正，而不只是讓一般測試通過。
+我是 LLVM／MLIR upstream contributor，目前有 6 個修改已正式合併，另外 2 個已通過 review，4 個在 review 中。我的工作主要處理 AI compiler 的 FP8／MXFP 量化、向量 lowering、GPU codegen 和數值正確性，例如修正 NaN 被轉成 Infinity、不同 backend 算出不同結果，以及極端整數 overflow。我也會用 Alive2、全輸入枚舉和 regression tests 驗證修正，而不只是讓一般測試通過。
 
 ### 履歷版本
 
@@ -218,7 +228,7 @@ MLIR 的 affine 向量化在產生向量讀寫時，只要 memref 的維度能�
 
 1. 推動兩個已 approve 的 PR（#215696、#221248）合併，讓正式 upstream 貢獻由 6 個增加到 8 個。
 2. 完成 #217892 的 review，並接著送出 AMDGPU 硬體路徑的對應修正。
-3. 推進 #221185 與 #221268 的 review。候選清單前三名都已送出；下一題要重新掃描，第 4 名（tensor 上的 drop-unit-dims）預期有設計辯論，第 5 名關鍵字弱。
+3. 推進 #221185、#221268 與 #221288 的 review。第二次掃描（GPU 轉換層＋Linalg 向量化）的結果在 `notes/gpu-linalg-patch-candidates.md`，下一題是 `tensor.insert_slice` 向量化對 rank-reducing／strided 產生錯 IR，再來是 `vector.contract` 混寬 extension 折疊過不了 verifier。
 4. 把目前用過的枚舉與語意驗證方法整理成自動化工具，用來系統性尋找更多 compiler correctness bug。
 
 ## 一句話總結

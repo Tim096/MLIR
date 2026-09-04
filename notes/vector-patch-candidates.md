@@ -1,5 +1,7 @@
 # `vector` 候選題目（2026-08-21 掃描，全部過第 1、2 關 + 撞車查證）
 
+> 前三名已全部送出。第二次掃描（GPU 轉換層＋Linalg 向量化，2026-09-05）見 [`gpu-linalg-patch-candidates.md`](gpu-linalg-patch-candidates.md)。
+
 > 掃描範圍：`mlir/lib/Dialect/Vector/` ＋ `mlir/lib/Conversion/VectorTo*/` 的全部 TODO/FIXME。
 > 判準是 `Goal.md` §8.7 的四關，行號對 `origin/main` = `bd9990e127e1`。
 > **每一條的第 1 關證據都是實查的檔案路徑，不是推論。**

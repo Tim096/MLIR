@@ -1,0 +1,1 @@
+@fabianmcg @grypp @kuhar this fixes an abort in `convert-gpu-to-nvvm` that `convert-vector-to-gpu` output reaches with a `subf` or `negf` epilogue; @simpel01 the `truncf` case from #182499 hits the same `llvm_unreachable` on the NVVM side, and the PTX ISA rules out a lowering for it, so it now fails to legalize instead. Would you mind taking a look when you have a moment? Thanks.
