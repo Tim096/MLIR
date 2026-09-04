@@ -1517,6 +1517,13 @@ CHECK 反映改動前行為；第二個 commit 才是修正 + CHECK 的 diff。
 
 見下面「⭐ 題目清單」的 **M1-b**。
 
+### 5. 2026-09-05 現況：等五個 open PR，下一題要重新掃描
+
+- 等 merge：#215696（kuhar approve，第二人未出現）、#221248（mplatings approve）。**已 approve 未 merge 就禮貌 ping，要帶新資訊。**
+- 等 review：#217892（krzysz00）、#221185（dcaballe）、#221268（banach-space／dcaballe／FedericoBruzzone）。
+- `notes/vector-patch-candidates.md` 前三名都送了；第 4 名（tensor 上的 drop-unit-dims）預期設計辯論，第 5 名（strided gather）關鍵字弱。
+  **下一題先做一次新掃描**：範圍往路線的下一站走——`Linalg/Transforms/Vectorization.cpp`、`Conversion/VectorToGPU`、`NVGPU`、`GPUToNVVM`——仍用 §8.7 四關 ＋ 撞車查證。
+
 ---
 
 ## 未解問題（有結論就搬進 `notes/`）
