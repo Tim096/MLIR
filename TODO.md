@@ -15,7 +15,7 @@
 
 ## 一句話現況
 
-**六個 commit 已進 upstream（#215123 09-04 中午 merge）。十九個 open PR：#215696、#221248 與 #221314（joker-eph 09-04 approve）已 approve 等人按 merge，#217892 在 review，#221185（i2 trunci）09-04 送、#221268（`in_bounds` 要看索引）、#221288（WMMA elementwise 降 NVVM 崩潰）、#221293（`insert_slice` 向量化前置條件）、#221298（ext 折進 `vector.contract` 要同來源型別）、#221307（`convert-vector-to-scf` 拒收 `vector.mask` 裡的 transfer op）、#221308（AMDGPU maskedload 保留 `alignment`）、#221312（`gpu-decompose-memrefs` 保留 load／store 屬性）、#221314（`memref-elide-reinterpret-cast` 保留 load 屬性）、#221317（六個 vector folder 保留 `alignment`）、#221319（vector linearize 保留 load／store 屬性）與 #221320（`memref-emulate-wide-int` 補 `alignment`／`invariant`）09-05 送；#221382（gather unroll／`-lower-vector-mask` 保留 `alignment`）、#221383（`StoreOpFromBroadcast` 保留屬性）、#221384（`complex` 三個 fold 要查 fastmath）與 #221385（索引會移時重算 alignment，新 helper `getAlignmentAfterOffset`）09-05 下午送。**
+**六個 commit 已進 upstream（#215123 09-04 中午 merge）。二十個 open PR：#215696、#221248 與 #221314（joker-eph 09-04 approve）已 approve 等人按 merge，#217892 在 review，#221185（i2 trunci）09-04 送、#221268（`in_bounds` 要看索引）、#221288（WMMA elementwise 降 NVVM 崩潰）、#221293（`insert_slice` 向量化前置條件）、#221298（ext 折進 `vector.contract` 要同來源型別）、#221307（`convert-vector-to-scf` 拒收 `vector.mask` 裡的 transfer op）、#221308（AMDGPU maskedload 保留 `alignment`）、#221312（`gpu-decompose-memrefs` 保留 load／store 屬性）、#221314（`memref-elide-reinterpret-cast` 保留 load 屬性）、#221317（六個 vector folder 保留 `alignment`）、#221319（vector linearize 保留 load／store 屬性）與 #221320（`memref-emulate-wide-int` 補 `alignment`／`invariant`）09-05 送；#221382（gather unroll／`-lower-vector-mask` 保留 `alignment`）、#221383（`StoreOpFromBroadcast` 保留屬性）、#221384（`complex` 三個 fold 要查 fastmath）、#221385（索引會移時重算 alignment，新 helper `getAlignmentAfterOffset`）與 #221386（`ArithToAMDGPU` 只在 scale 是 E8M0 時走硬體指令 ＋ 折掉 `truncf toward_zero`，#217892 的 AMDGPU 側）09-05 下午送。**
 **08-21 → 09-04 兩週三個 PR 都沒人回，09-04 全部 rebase 到當天 main、回掉 krzysz00 的 nit，再各 ping 一次；#215123 當天就進了，#221248 送出當天就被 approve。**
 **⚠️ 原則不變：已 approve 未 merge 就禮貌 ping，每次都要帶新資訊。**
 
@@ -46,6 +46,7 @@
 | [#221383](https://github.com/llvm/llvm-project/pull/221383) | VS-2：`StoreOpFromBroadcast` 的 `vector.store`／`memref.store` 兩個分支丟 `nontemporal`／`alignment` | 🆕 **2026-09-05 送出**，head `7f333326e7b0`，2 個檔案 +24/−2。留言（5549001120）點名 Hardcode84、newling、banach-space | 跑中 |
 | [#221384](https://github.com/llvm/llvm-project/pull/221384) | C-1：`complex.add(sub(a,b),b)`／`sub(add(a,b),b)`／`exp(log(a))` 三個 fold 不看 fastmath；改成照 LLVM 要 `reassoc`+`nsz`／`afn`（第一個 Complex patch，語意題不是漏傳） | 🆕 **2026-09-05 送出**，head `378e96fe4dfd`，2 個檔案 +74/−14。留言（5549028508）點名 Bryth、JDPailleux（#212751／#212781 的作者與 reviewer）、lewuathe | 跑中 |
 | [#221385](https://github.com/llvm/llvm-project/pull/221385) | VA-1：`ExtractOpFromLoad`／`UnrollLoad`／`UnrollStore` 索引會移，alignment 用新 helper `vector::getAlignmentAfterOffset`（`commonAlignment(A, byteOffset)`，stride／offset 動態就丟）重算，`nontemporal` 直轉 | 🆕 **2026-09-05 送出**，head `c2086dd854a5`，6 個檔案 +168/−6，全樹 check-mlir 4588／16 同基準。留言（5549124992）點名 Hardcode84、nbpatel、banach-space、kuhar | 跑中 |
+| [#221386](https://github.com/llvm/llvm-project/pull/221386) | M1-f：`ArithToAMDGPU` 對 scale 型別零檢查，硬體只讀 exponent；改成只認 `f8E8M0FNU`（其餘留給 `arith-expand`），並把 `arith.truncf ... toward_zero : f32 to f8E8M0FNU` 折進指令。#215295 krzysz00 的建議、#217892 的 AMDGPU 側 | 🆕 **2026-09-05 送出**，head `3cc500a59ae0`，3 個檔案 +134/−30。留言（5549169899）點名 krzysz00、tgymnich、Muzammiluddin-Syed-ECE、kuhar，並問要不要改成 pass 內自己展開 | 跑中 |
 
 ### 🔧 2026-09-05：第十～十二個 open PR——平行送三題（分支 `vector-to-scf-decline-masked`、`amdgpu-maskedload-keep-alignment`、`gpu-decompose-memrefs-keep-attrs`）
 
@@ -93,7 +94,11 @@ fastmath 掃描的其餘結果（`PowIStrengthReduction` float 分支漏轉、`E
 
 **已送出：[#221382](https://github.com/llvm/llvm-project/pull/221382)、[#221383](https://github.com/llvm/llvm-project/pull/221383)、[#221384](https://github.com/llvm/llvm-project/pull/221384)、[#221385](https://github.com/llvm/llvm-project/pull/221385)。十九個 open PR，三個已 approve（#221314 送出半小時 joker-eph 就 approve）。**
 
-**下一題（較難）**：#217892 的後續——`ArithToAMDGPU` 只在 scale 已是 `f8E8M0FNU` 時走 `cvt.scalef32` 硬體路徑，其餘留給 `arith-expand`。agent 研究完：pattern 沒有任何 scale 型別檢查（`ArithToAMDGPU.cpp:456,474-477`），硬體只讀 bits 31:23，樹裡 folder（我的 #215123）已經只認 E8M0，`arith-expand` 也是先 truncf 到 E8M0；四個 `f32` scale 測試要改型別成 E8M0（它們是多 slice 迴圈的唯一覆蓋），另加 f32／f16 的負向測試。krzysz00 在 #217892 已表態支持這個方向。
+**已送出：[#221386](https://github.com/llvm/llvm-project/pull/221386)。二十個 open PR。** 做法見 `notes/amdgpu-scaling-e8m0-scale.md`：只認 E8M0 ＋ 折掉 `truncf toward_zero`（E8M0 byte 與 f32 exponent field 同編碼），四個 f32 測試改型別、六個新測試。這是行為改變，ping 裡主動問 krzysz00 要不要改成 pass 內展開。
+
+**下一題候選**：(1) `arith-expand` 的 `F8E8M0TruncFOpConverter` 該接受 `toward_zero`（bit-extract 本來就是 toward zero，現在有 roundingmode attr 就 bail）；(2) `notes/fastmath-sweep.md` 第 4 項 maximumf／minimumf 展開用 `nnan` 省掉 NaN 修補（有料）；(3) narrow-type emulation 兩組的 alignment 重算（用 #221385 的 helper，但 base 是 linearized memref，要先看 #189235 怎麼算 byte alignment）。
+
+~~**下一題（較難）**：#217892 的後續——`ArithToAMDGPU` 只在 scale 已是 `f8E8M0FNU` 時走 `cvt.scalef32` 硬體路徑，其餘留給 `arith-expand`。~~ agent 研究完：pattern 沒有任何 scale 型別檢查（`ArithToAMDGPU.cpp:456,474-477`），硬體只讀 bits 31:23，樹裡 folder（我的 #215123）已經只認 E8M0，`arith-expand` 也是先 truncf 到 E8M0；四個 `f32` scale 測試要改型別成 E8M0（它們是多 slice 迴圈的唯一覆蓋），另加 f32／f16 的負向測試。krzysz00 在 #217892 已表態支持這個方向。
 
 ### 🔧 2026-09-05：第九個 open PR——ext 折進 `vector.contract` 要同來源型別（分支 `vector-fold-ext-contract-same-type`）
 

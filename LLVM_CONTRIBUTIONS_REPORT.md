@@ -5,11 +5,11 @@
 
 ## 結論先看
 
-我目前向 LLVM 官方專案提出過 **25 個程式碼修改**：
+我目前向 LLVM 官方專案提出過 **26 個程式碼修改**：
 
 - **6 個已正式合併**，成為 LLVM／MLIR 的一部分。
 - **3 個已通過 maintainer review**，測試也全部通過，正在等待合併。
-- **16 個正在 review**：一個處理不同硬體轉換路徑對 MXFP scale 的解讀分歧，一個補上 2-bit 量化的向量截斷重寫，一個修正向量化時把會越界的讀寫標成安全的判斷，一個修正 GPU tensor core 的 matmul 後面接減法或取負時編譯器直接崩潰的問題，一個修正向量化器把 tensor 切片寫到錯誤位置的問題，一個修正混合精度矩陣乘法折疊產生不合法 IR 的問題，一個修正帶 mask 的向量讀寫經過迴圈展開後產生不合法 IR 的問題，七個修正記憶體存取改寫時遺失對齊與快取提示的問題（其中一個在位址移動後重新計算對齊），一個修正複數運算的化簡在沒有 fast-math 授權時就改變結果的問題。
+- **17 個正在 review**：一個處理不同硬體轉換路徑對 MXFP scale 的解讀分歧，一個把 AMD 硬體的 MXFP 轉換指令限制在它能精確計算的 scale 格式上，一個補上 2-bit 量化的向量截斷重寫，一個修正向量化時把會越界的讀寫標成安全的判斷，一個修正 GPU tensor core 的 matmul 後面接減法或取負時編譯器直接崩潰的問題，一個修正向量化器把 tensor 切片寫到錯誤位置的問題，一個修正混合精度矩陣乘法折疊產生不合法 IR 的問題，一個修正帶 mask 的向量讀寫經過迴圈展開後產生不合法 IR 的問題，七個修正記憶體存取改寫時遺失對齊與快取提示的問題（其中一個在位址移動後重新計算對齊），一個修正複數運算的化簡在沒有 fast-math 授權時就改變結果的問題。
 - 另外提出過 **2 個技術問題報告**；其中 1 個已由我自己修好並合併。
 
 這些工作主要處理 AI compiler 在量化、向量運算和數值轉換時可能遇到的錯誤，包括：
@@ -25,7 +25,7 @@
 |---|---:|---|
 | 已合併進 LLVM | **6** | FP8、MXFP 常數最佳化、整數邊界、Vector mask、LLVM 浮點核心 |
 | 已通過 review | **3** | 跨後端整數正確性、GPU MMA 轉置 store、MemRef 轉型省略時保留存取屬性 |
-| Review 中 | **16** | MXFP scale 語意統一、2-bit 向量截斷、向量化 in_bounds 越界判斷、tensor core elementwise epilogue 崩潰、insert_slice 向量化寫錯位置、混合精度 contract 折疊、帶 mask 的向量讀寫展開、AMDGPU／GPU／MemRef／Vector 記憶體存取屬性保留（七項，含位址移動後重算對齊）、複數運算化簡的 fast-math 檢查 |
+| Review 中 | **17** | MXFP scale 語意統一、AMDGPU MXFP 指令的 scale 格式限制、2-bit 向量截斷、向量化 in_bounds 越界判斷、tensor core elementwise epilogue 崩潰、insert_slice 向量化寫錯位置、混合精度 contract 折疊、帶 mask 的向量讀寫展開、AMDGPU／GPU／MemRef／Vector 記憶體存取屬性保留（七項，含位址移動後重算對齊）、複數運算化簡的 fast-math 檢查 |
 | 技術 Issue | **2** | 浮點 crash、MXFP 不同 lowering 結果不一致 |
 
 ## 已正式合併的 6 項貢獻
@@ -119,7 +119,7 @@ AI compiler 常用 mask 表示「只處理向量中的部分元素」，例如�
 
 這表示同一份模型或程式，可能因選擇不同 backend 而得到不同答案。我把 Index、Affine、LLVM、SPIR-V 與數值範圍分析的相關實作統一成相同的正確演算法。
 
-## 正在 review 的 16 項貢獻
+## 正在 review 的 17 項貢獻
 
 ### 8. 同一個 MXFP 操作經過不同 lowering，可能算出不同答案
 
@@ -297,6 +297,14 @@ Complex dialect 會把 `(a − b) + b`、`(a + b) − b` 與 `exp(log(a))` 直�
 
 前面幾項都是位址不變、屬性照抄。這一項不同：把大向量的讀寫切成小塊，或只取其中一個元素時，新的存取落在原位址往後一段距離，原本的對齊不能照抄。我加入一個共用的計算：把小塊的偏移量經由記憶體的靜態 stride 換算成 byte 距離，取原對齊與這段距離都滿足的最大 2 的冪；距離或 stride 不是靜態時就放棄。這是 MLIR 裡第一個做這種推導的地方，測試把每個小塊算出來的對齊值逐一列出，並跑完整 MLIR 測試套件。
 
+### 26. 讓 AMD 硬體的 MXFP 轉換指令只處理它能精確計算的 scale 格式
+
+- [PR #221386](https://github.com/llvm/llvm-project/pull/221386)
+- 狀態：**已送出，review 中**（2026-09-05）
+- 修改範圍：MLIR Arith 到 AMDGPU 的轉換
+
+gfx950 的 scaled conversion 指令只讀 scale 的指數位元，所以只有 scale 本身就是 `f8E8M0FNU`（純指數格式）時，它算的才是 `arith.scaling_extf`／`scaling_truncf` 定義的結果。原本的轉換對任何浮點 scale 都直接送進指令，尾數被靜默丟掉。這是我在第 8 項（#217892）review 中與 maintainer 討論硬體規格後得出的後續：轉換只接受 `f8E8M0FNU` scale，其他格式交給通用展開；並依 maintainer 的建議，把「f32 向零截斷成 `f8E8M0FNU`」這個與硬體行為完全相同的步驟直接折進指令，省掉一來一回的轉型。原有的 f32 scale 測試改成 E8M0 以保留對多切片迴圈的覆蓋，另加六個測試。
+
 ## 這些成果證明了什麼能力
 
 ### AI compiler 與數值正確性
@@ -345,8 +353,8 @@ Complex dialect 會把 `(a − b) + b`、`(a + b) − b` 與 `exp(log(a))` 直�
 ## 下一步
 
 1. 推動三個已 approve 的 PR（#215696、#221248、#221314）合併，讓正式 upstream 貢獻由 6 個增加到 9 個。
-2. 完成 #217892 的 review，並送出 AMDGPU 硬體路徑的對應修正：只在 scale 已是 `f8E8M0FNU` 時走硬體指令，其餘交給通用展開（設計研究已完成，見 `TODO.md`）。
-3. 推進其餘 16 個 review 中的 PR。fast-math 掃描（`notes/fastmath-sweep.md`）還有四個排好順序的候選，`notes/attr-drop-sweep.md` 剩兩組 narrow-type emulation 要重算對齊。
+2. 完成 #217892 與其 AMDGPU 側 #221386 的 review；兩者合起來讓 MXFP scale 在通用路徑與硬體路徑上的意義一致。
+3. 推進其餘 review 中的 PR。fast-math 掃描（`notes/fastmath-sweep.md`）還有四個排好順序的候選，`notes/attr-drop-sweep.md` 剩兩組 narrow-type emulation 要重算對齊。
 4. 把目前用過的枚舉與語意驗證方法整理成自動化工具，用來系統性尋找更多 compiler correctness bug。
 
 ## 一句話總結
