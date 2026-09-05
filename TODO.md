@@ -15,7 +15,7 @@
 
 ## 一句話現況
 
-**六個 commit 已進 upstream（#215123 09-04 中午 merge）。十五個 open PR：#215696 與 #221248 已 approve 等人按 merge，#217892 在 review，#221185（i2 trunci）09-04 送、#221268（`in_bounds` 要看索引）、#221288（WMMA elementwise 降 NVVM 崩潰）、#221293（`insert_slice` 向量化前置條件）、#221298（ext 折進 `vector.contract` 要同來源型別）、#221307（`convert-vector-to-scf` 拒收 `vector.mask` 裡的 transfer op）、#221308（AMDGPU maskedload 保留 `alignment`）、#221312（`gpu-decompose-memrefs` 保留 load／store 屬性）、#221314（`memref-elide-reinterpret-cast` 保留 load 屬性）、#221317（六個 vector folder 保留 `alignment`）、#221319（vector linearize 保留 load／store 屬性）與 #221320（`memref-emulate-wide-int` 補 `alignment`／`invariant`）09-05 送。**
+**六個 commit 已進 upstream（#215123 09-04 中午 merge）。十九個 open PR：#215696、#221248 與 #221314（joker-eph 09-04 approve）已 approve 等人按 merge，#217892 在 review，#221185（i2 trunci）09-04 送、#221268（`in_bounds` 要看索引）、#221288（WMMA elementwise 降 NVVM 崩潰）、#221293（`insert_slice` 向量化前置條件）、#221298（ext 折進 `vector.contract` 要同來源型別）、#221307（`convert-vector-to-scf` 拒收 `vector.mask` 裡的 transfer op）、#221308（AMDGPU maskedload 保留 `alignment`）、#221312（`gpu-decompose-memrefs` 保留 load／store 屬性）、#221314（`memref-elide-reinterpret-cast` 保留 load 屬性）、#221317（六個 vector folder 保留 `alignment`）、#221319（vector linearize 保留 load／store 屬性）與 #221320（`memref-emulate-wide-int` 補 `alignment`／`invariant`）09-05 送；#221382（gather unroll／`-lower-vector-mask` 保留 `alignment`）、#221383（`StoreOpFromBroadcast` 保留屬性）、#221384（`complex` 三個 fold 要查 fastmath）與 #221385（索引會移時重算 alignment，新 helper `getAlignmentAfterOffset`）09-05 下午送。**
 **08-21 → 09-04 兩週三個 PR 都沒人回，09-04 全部 rebase 到當天 main、回掉 krzysz00 的 nit，再各 ping 一次；#215123 當天就進了，#221248 送出當天就被 approve。**
 **⚠️ 原則不變：已 approve 未 merge 就禮貌 ping，每次都要帶新資訊。**
 
@@ -38,10 +38,14 @@
 | [#221307](https://github.com/llvm/llvm-project/pull/221307) | VS-1：`convert-vector-to-scf` 的五個 transfer pattern 沒查自己是不是在 `vector.mask` 裡，展開的 loop／buffer 全塞進 mask region，`'vector.mask' op expects only one operation to mask`；每個 pattern 入口加 `isMasked()` 拒收（第二個 VectorToSCF patch） | 🆕 **2026-09-05 送出**，head `af0e5de00d82`（base `f6a369fa4a57`），2 個檔案 +87/−0。CODEOWNERS 自動指派 `matthias-springer`、`banach-space`、`nicolasvasilache`、`dcaballe`；留言（5544686298）點名 `banach-space`、`dcaballe`、`matthias-springer` | 跑中 |
 | [#221308](https://github.com/llvm/llvm-project/pull/221308) | GPU-4：`amdgpu-maskedload-to-load` 重建 `vector.load`／`store` 時丟掉 `alignment`，LLVM 層退回 element 對齊（f16 從 `align 16` 變 `align 2`）；透過 builder 轉傳（第一個 AMDGPU patch，效能不是正確性） | 🆕 **2026-09-05 送出**，head `8378fb4c6fbd`（base `f6a369fa4a57`），2 個檔案 +48/−2。自動指派 `krzysz00`、`kuhar`；留言（5544719647）點名 `krzysz00`、`Groverkss`、`kuhar` | 跑中 |
 | [#221312](https://github.com/llvm/llvm-project/pull/221312) | GPU-3：`gpu-decompose-memrefs` 重建 `memref.load`／`store` 時丟掉 `nontemporal`／`alignment`／`invariant`；改用帶三個屬性的 builder（第三個 GPU dialect patch） | 🆕 **2026-09-05 送出**，head `292a8a8cb25a`（base `f6a369fa4a57`），2 個檔案 +60/−2。自動指派 `fabianmcg`；留言（5544811835）點名 `Hardcode84`（pass 作者）、`kuhar`、`krzysz00` | 跑中 |
-| [#221314](https://github.com/llvm/llvm-project/pull/221314) | M-1：`memref-elide-reinterpret-cast` 的 `RewriteLoadFromReinterpretCast` 重建 `memref.load` 時丟掉 `nontemporal`／`alignment`／`invariant`；改用帶三個屬性的 builder（#221312 同款） | 🆕 **2026-09-05 送出**，head `c63ecc0da80d`（base `f6a369fa4a57`），2 個檔案 +18/−1。留言（5544900426）點名 `ioghiban`（檔案作者）、`banach-space`（三個前 PR 的 approver） | 跑中 |
+| [#221314](https://github.com/llvm/llvm-project/pull/221314) | M-1：`memref-elide-reinterpret-cast` 的 `RewriteLoadFromReinterpretCast` 重建 `memref.load` 時丟掉 `nontemporal`／`alignment`／`invariant`；改用帶三個屬性的 builder（#221312 同款） | ✅ **joker-eph 09-04 19:07 APPROVED**（送出後半小時），，head `c63ecc0da80d`（base `f6a369fa4a57`），2 個檔案 +18/−1。留言（5544900426）點名 `ioghiban`（檔案作者）、`banach-space`（三個前 PR 的 approver） | 跑中 |
 | [#221317](https://github.com/llvm/llvm-project/pull/221317) | VF-1：`VectorOps.cpp` 六個 canonicalization folder（maskedload／maskedstore／expandload／compressstore 全 true、gather／scatter contiguous）重建時丟 `alignment`；六處各加 `getMaybeAlign()` | 🆕 **2026-09-05 送出**，head `1b2aca62fe7e`（base `f6a369fa4a57`），3 個檔案 +98/−8。自動指派 banach-space／nicolasvasilache／dcaballe／Groverkss；留言（5545072108）點名 banach-space、dcaballe、kuhar。check-mlir 4588／16 同基準 | 跑中 |
 | [#221319](https://github.com/llvm/llvm-project/pull/221319) | VL-1：`VectorLinearize.cpp` 的 `LinearizeVectorLoad`／`Store` 丟 `alignment`＋`nontemporal`；兩處轉發 | 🆕 **2026-09-05 送出**，head `2bb26b72e617`，2 個檔案 +28/−4。留言（5545099840）點名 nbpatel（pattern 作者）、newling（approver）、banach-space | 跑中 |
 | [#221320](https://github.com/llvm/llvm-project/pull/221320) | M-2：`EmulateWideInt.cpp` 只轉 `nontemporal`，漏 `alignment`／`invariant`；改用 attr builder 全轉 | 🆕 **2026-09-05 送出**，head `7b2fa9a73327`，2 個檔案 +19/−2。留言（5545103709）點名 kuhar（pass 作者）、banach-space | 跑中 |
+| [#221382](https://github.com/llvm/llvm-project/pull/221382) | VG-1：`UnrollGatherPattern`／`MaskedGatherOpPattern` 重建 gather 丟 `alignment`；bufferization 那處不算（verifier 禁 tensor base 帶 alignment） | 🆕 **2026-09-05 送出**，head `72a673f8a046`，4 個檔案 +29/−2。留言（5548988209）點名 qedawkins、dcaballe、amd-eochoalo | 跑中 |
+| [#221383](https://github.com/llvm/llvm-project/pull/221383) | VS-2：`StoreOpFromBroadcast` 的 `vector.store`／`memref.store` 兩個分支丟 `nontemporal`／`alignment` | 🆕 **2026-09-05 送出**，head `7f333326e7b0`，2 個檔案 +24/−2。留言（5549001120）點名 Hardcode84、newling、banach-space | 跑中 |
+| [#221384](https://github.com/llvm/llvm-project/pull/221384) | C-1：`complex.add(sub(a,b),b)`／`sub(add(a,b),b)`／`exp(log(a))` 三個 fold 不看 fastmath；改成照 LLVM 要 `reassoc`+`nsz`／`afn`（第一個 Complex patch，語意題不是漏傳） | 🆕 **2026-09-05 送出**，head `378e96fe4dfd`，2 個檔案 +74/−14。留言（5549028508）點名 Bryth、JDPailleux（#212751／#212781 的作者與 reviewer）、lewuathe | 跑中 |
+| [#221385](https://github.com/llvm/llvm-project/pull/221385) | VA-1：`ExtractOpFromLoad`／`UnrollLoad`／`UnrollStore` 索引會移，alignment 用新 helper `vector::getAlignmentAfterOffset`（`commonAlignment(A, byteOffset)`，stride／offset 動態就丟）重算，`nontemporal` 直轉 | 🆕 **2026-09-05 送出**，head `c2086dd854a5`，6 個檔案 +168/−6，全樹 check-mlir 4588／16 同基準。留言（5549124992）點名 Hardcode84、nbpatel、banach-space、kuhar | 跑中 |
 
 ### 🔧 2026-09-05：第十～十二個 open PR——平行送三題（分支 `vector-to-scf-decline-masked`、`amdgpu-maskedload-keep-alignment`、`gpu-decompose-memrefs-keep-attrs`）
 
@@ -74,6 +78,22 @@
 **已送出：[#221317](https://github.com/llvm/llvm-project/pull/221317)、[#221319](https://github.com/llvm/llvm-project/pull/221319)、[#221320](https://github.com/llvm/llvm-project/pull/221320)。十五個 open PR。**
 
 **下一題**：候選清單剩 L-2（`DecomposeOuterUnitDimsPackOpPattern` 的 padding bail，中等設計風險，先 @ #218141 作者）與 V-2（價值最低）；`ElideReinterpretCast.cpp:622` 的同款已送出為 #221314。
+
+### 🔧 2026-09-05 下午：第十七～二十個 open PR——掃描收尾 ＋ 第一題「有份量」的（分支 `vector-gather-keep-alignment`、`vector-sink-store-keep-attrs`、`complex-fold-fastmath`、`vector-keep-alignment-after-offset`）
+
+本人指示：這輪之後轉向較難、較有建設性的題，不再只做小修小補。所以這輪先把掃描表清掉，再挑兩題有份量的。
+
+**掃描收尾**：四處「位址不變」的候選做成兩個 PR。gather 兩處（#221382）一行一個；bufferization 那處寫了測試才被 verifier 擋下——tensor base 根本不准帶 `alignment`，刷掉並寫進 PR body。`StoreOpFromBroadcast`（#221383）兩個分支各一行。反向疑慮 `LowerVectorGather.cpp:297` 查 td 後確認 gather 的 alignment 是 per-element，抄是對的，撤掉。
+
+**有份量的兩題**：
+- **#221385 alignment 重算**：`ExtractOpFromLoad`／`UnrollLoad`／`UnrollStore` 把索引往後移，alignment 不能照抄。加 `vector::getAlignmentAfterOffset`：offsets 經靜態 stride 換成 byte 距離，回 `llvm::commonAlignment(A, D)`；stride／offset 動態、元素不是整 byte 就回空。樹裡第一個用 `commonAlignment` 的地方，ping 時主動說名字與位置可討論。測試把數字算給 reviewer 看（4x4 f16 切 2x2：16／4／16／4）。
+- **#221384 complex fold 語意**：第二個 agent 掃 fastmath 時發現 `complex.add(complex.sub(a, b), b) → a` 這類 fold 不看任何 flag 就做，`(1 − 1e30) + 1e30 = 0`。照 LLVM `InstructionSimplify` 的規則加 `reassoc`+`nsz`，`exp(log)` 要雙方 `afn`。Bryth 08-11 才修過隔壁兩個（#212751／#212781），這是剩下的三個。
+
+fastmath 掃描的其餘結果（`PowIStrengthReduction` float 分支漏轉、`ExpandOps.cpp:894` 明寫 `nullptr`、`MathToLibm` 升型丟 flag、maximumf 展開沒用 `nnan` 省 NaN 修補）在 `notes/fastmath-sweep.md`，排好順序但先不送，等 #221384 的反應。
+
+**已送出：[#221382](https://github.com/llvm/llvm-project/pull/221382)、[#221383](https://github.com/llvm/llvm-project/pull/221383)、[#221384](https://github.com/llvm/llvm-project/pull/221384)、[#221385](https://github.com/llvm/llvm-project/pull/221385)。十九個 open PR，三個已 approve（#221314 送出半小時 joker-eph 就 approve）。**
+
+**下一題（較難）**：#217892 的後續——`ArithToAMDGPU` 只在 scale 已是 `f8E8M0FNU` 時走 `cvt.scalef32` 硬體路徑，其餘留給 `arith-expand`。agent 研究完：pattern 沒有任何 scale 型別檢查（`ArithToAMDGPU.cpp:456,474-477`），硬體只讀 bits 31:23，樹裡 folder（我的 #215123）已經只認 E8M0，`arith-expand` 也是先 truncf 到 E8M0；四個 `f32` scale 測試要改型別成 E8M0（它們是多 slice 迴圈的唯一覆蓋），另加 f32／f16 的負向測試。krzysz00 在 #217892 已表態支持這個方向。
 
 ### 🔧 2026-09-05：第九個 open PR——ext 折進 `vector.contract` 要同來源型別（分支 `vector-fold-ext-contract-same-type`）
 

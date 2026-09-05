@@ -5,11 +5,11 @@
 
 ## 結論先看
 
-我目前向 LLVM 官方專案提出過 **21 個程式碼修改**：
+我目前向 LLVM 官方專案提出過 **25 個程式碼修改**：
 
 - **6 個已正式合併**，成為 LLVM／MLIR 的一部分。
-- **2 個已通過 maintainer review**，測試也全部通過，正在等待合併。
-- **9 個正在 review**：一個處理不同硬體轉換路徑對 MXFP scale 的解讀分歧，一個補上 2-bit 量化的向量截斷重寫，一個修正向量化時把會越界的讀寫標成安全的判斷，一個修正 GPU tensor core 的 matmul 後面接減法或取負時編譯器直接崩潰的問題，一個修正向量化器把 tensor 切片寫到錯誤位置的問題，一個修正混合精度矩陣乘法折疊產生不合法 IR 的問題，一個修正帶 mask 的向量讀寫經過迴圈展開後產生不合法 IR 的問題，兩個修正 GPU 記憶體存取改寫時遺失對齊與快取提示的問題。
+- **3 個已通過 maintainer review**，測試也全部通過，正在等待合併。
+- **16 個正在 review**：一個處理不同硬體轉換路徑對 MXFP scale 的解讀分歧，一個補上 2-bit 量化的向量截斷重寫，一個修正向量化時把會越界的讀寫標成安全的判斷，一個修正 GPU tensor core 的 matmul 後面接減法或取負時編譯器直接崩潰的問題，一個修正向量化器把 tensor 切片寫到錯誤位置的問題，一個修正混合精度矩陣乘法折疊產生不合法 IR 的問題，一個修正帶 mask 的向量讀寫經過迴圈展開後產生不合法 IR 的問題，七個修正記憶體存取改寫時遺失對齊與快取提示的問題（其中一個在位址移動後重新計算對齊），一個修正複數運算的化簡在沒有 fast-math 授權時就改變結果的問題。
 - 另外提出過 **2 個技術問題報告**；其中 1 個已由我自己修好並合併。
 
 這些工作主要處理 AI compiler 在量化、向量運算和數值轉換時可能遇到的錯誤，包括：
@@ -24,8 +24,8 @@
 | 狀態 | 數量 | 代表成果 |
 |---|---:|---|
 | 已合併進 LLVM | **6** | FP8、MXFP 常數最佳化、整數邊界、Vector mask、LLVM 浮點核心 |
-| 已通過 review | **2** | 跨後端整數正確性、GPU MMA 轉置 store |
-| Review 中 | **13** | MXFP scale 語意統一、2-bit 向量截斷、向量化 in_bounds 越界判斷、tensor core elementwise epilogue 崩潰、insert_slice 向量化寫錯位置、混合精度 contract 折疊、帶 mask 的向量讀寫展開、AMDGPU／GPU／MemRef／Vector 記憶體存取屬性保留（六項） |
+| 已通過 review | **3** | 跨後端整數正確性、GPU MMA 轉置 store、MemRef 轉型省略時保留存取屬性 |
+| Review 中 | **16** | MXFP scale 語意統一、2-bit 向量截斷、向量化 in_bounds 越界判斷、tensor core elementwise epilogue 崩潰、insert_slice 向量化寫錯位置、混合精度 contract 折疊、帶 mask 的向量讀寫展開、AMDGPU／GPU／MemRef／Vector 記憶體存取屬性保留（七項，含位址移動後重算對齊）、複數運算化簡的 fast-math 檢查 |
 | 技術 Issue | **2** | 浮點 crash、MXFP 不同 lowering 結果不一致 |
 
 ## 已正式合併的 6 項貢獻
@@ -94,7 +94,7 @@ AI compiler 常用 mask 表示「只處理向量中的部分元素」，例如�
 
 這是我的第一個主要修改 LLVM 核心函式庫、而不只修改 MLIR 的貢獻。
 
-## 已通過 review、等待合併的 2 項貢獻
+## 已通過 review、等待合併的 3 項貢獻
 
 ### 6. 讓 MXFP 量化操作可以提前算出常數結果
 
@@ -119,7 +119,7 @@ AI compiler 常用 mask 表示「只處理向量中的部分元素」，例如�
 
 這表示同一份模型或程式，可能因選擇不同 backend 而得到不同答案。我把 Index、Affine、LLVM、SPIR-V 與數值範圍分析的相關實作統一成相同的正確演算法。
 
-## 正在 review 的 13 項貢獻
+## 正在 review 的 16 項貢獻
 
 ### 8. 同一個 MXFP 操作經過不同 lowering，可能算出不同答案
 
@@ -232,7 +232,7 @@ GPU dialect 有一個轉換把 kernel 裡的多維記憶體存取改成「算出
 ### 18. 修正消除 reinterpret_cast 時遺失記憶體存取提示的問題
 
 - [PR #221314](https://github.com/llvm/llvm-project/pull/221314)
-- 狀態：**已送出，review 中**（2026-09-05）
+- 狀態：**已 approve（joker-eph，送出後半小時），等待合併**（2026-09-04）
 - 修改範圍：MLIR MemRef dialect transforms
 
 MemRef dialect 有一個轉換會把「先用 `reinterpret_cast` 增減單位維度、再讀取」改寫成直接讀原本的記憶體，省掉一層轉型。重建讀取時只傳了原記憶體與對應後的索引，`nontemporal`、`alignment` 與 `invariant` 三個提示全部遺失。這和第 17 項是同一種問題，我在做第 17 項時順手記下這個位置，這一輪補上。
@@ -264,6 +264,38 @@ MemRef dialect 有一個轉換會把「先用 `reinterpret_cast` 增減單位維
 - 修改範圍：MLIR MemRef dialect transforms（wide integer emulation）
 
 寬整數模擬把目標不支援的 `i64` 記憶體改成 `vector<2xi32>`，位元組配置完全相同。這個轉換在 2023 年就已經轉傳 `nontemporal`，但後來新增的 `alignment` 與 `invariant` 沒有人接上。修法是在同一個呼叫裡把三個屬性一起轉傳，並補一個測試。
+
+### 22. 修正 gather 在展開與 mask 降階時遺失對齊資訊的問題
+
+- [PR #221382](https://github.com/llvm/llvm-project/pull/221382)
+- 狀態：**已送出，review 中**（2026-09-05）
+- 修改範圍：MLIR Vector dialect transforms（unrolling、mask lowering）
+
+`vector.gather` 被切成小塊或從 `vector.mask` 裡拆出來時，讀的仍是同一組位址，但重建時遺失了 `alignment`。修法是兩處各透過 builder 轉傳。過程中也確認 bufferization 那一處不需要修：tensor 上本來就不允許帶這個屬性。
+
+### 23. 修正把 broadcast 下沉進 store 時遺失屬性的問題
+
+- [PR #221383](https://github.com/llvm/llvm-project/pull/221383)
+- 狀態：**已送出，review 中**（2026-09-05）
+- 修改範圍：MLIR Vector dialect transforms（sink patterns）
+
+一個元素的向量 store 會被改寫成純量 store，位址不變，但 `nontemporal` 與 `alignment` 沒有跟著過去。兩個分支各補一行。
+
+### 24. 修正複數運算化簡在沒有 fast-math 授權時就改變結果的問題
+
+- [PR #221384](https://github.com/llvm/llvm-project/pull/221384)
+- 狀態：**已送出，review 中**（2026-09-05）
+- 修改範圍：MLIR Complex dialect folders
+
+Complex dialect 會把 `(a − b) + b`、`(a + b) − b` 與 `exp(log(a))` 直接化簡成 `a`，不檢查任何 fast-math flag。這三個等式在浮點數下不成立：中間結果會捨入（`(1 − 10³⁰) + 10³⁰` 算出 0），帶號零會被吃掉，`exp(log(a))` 只是近似。我依照 LLVM 對同樣化簡的規則，要求前兩類帶 `reassoc` 與 `nsz`、第三類雙方帶 `afn` 才做，並為每個化簡補上沒有 flag 時不能動的測試。這是這個 dialect 上個月才修過的同一批化簡裡剩下的三個。
+
+### 25. 讓向量讀寫在位址移動後仍保留正確的對齊資訊
+
+- [PR #221385](https://github.com/llvm/llvm-project/pull/221385)
+- 狀態：**已送出，review 中**（2026-09-05）
+- 修改範圍：MLIR Vector dialect utils 與 transforms（sink、unrolling）
+
+前面幾項都是位址不變、屬性照抄。這一項不同：把大向量的讀寫切成小塊，或只取其中一個元素時，新的存取落在原位址往後一段距離，原本的對齊不能照抄。我加入一個共用的計算：把小塊的偏移量經由記憶體的靜態 stride 換算成 byte 距離，取原對齊與這段距離都滿足的最大 2 的冪；距離或 stride 不是靜態時就放棄。這是 MLIR 裡第一個做這種推導的地方，測試把每個小塊算出來的對齊值逐一列出，並跑完整 MLIR 測試套件。
 
 ## 這些成果證明了什麼能力
 
@@ -312,9 +344,9 @@ MemRef dialect 有一個轉換會把「先用 `reinterpret_cast` 增減單位維
 
 ## 下一步
 
-1. 推動兩個已 approve 的 PR（#215696、#221248）合併，讓正式 upstream 貢獻由 6 個增加到 8 個。
-2. 完成 #217892 的 review，並接著送出 AMDGPU 硬體路徑的對應修正。
-3. 推進 #221185、#221268、#221288、#221293、#221298、#221307、#221308、#221312、#221314、#221317、#221319 與 #221320 的 review。掃描結果（`notes/attr-drop-sweep.md`）還有四處同款可送、四組要重算 alignment 的另一類問題。第二次掃描（GPU 轉換層＋Linalg 向量化）的結果在 `notes/gpu-linalg-patch-candidates.md`，剩下的候選是 `linalg.pack` 分解的 padding 支援。
+1. 推動三個已 approve 的 PR（#215696、#221248、#221314）合併，讓正式 upstream 貢獻由 6 個增加到 9 個。
+2. 完成 #217892 的 review，並送出 AMDGPU 硬體路徑的對應修正：只在 scale 已是 `f8E8M0FNU` 時走硬體指令，其餘交給通用展開（設計研究已完成，見 `TODO.md`）。
+3. 推進其餘 16 個 review 中的 PR。fast-math 掃描（`notes/fastmath-sweep.md`）還有四個排好順序的候選，`notes/attr-drop-sweep.md` 剩兩組 narrow-type emulation 要重算對齊。
 4. 把目前用過的枚舉與語意驗證方法整理成自動化工具，用來系統性尋找更多 compiler correctness bug。
 
 ## 一句話總結
