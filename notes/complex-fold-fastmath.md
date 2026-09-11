@@ -1,5 +1,7 @@
 # #221384：`complex` 三個 fold 沒查 fastmath 就無條件做
 
+09-11：matteo-rm（complex dialect 近期主要貢獻者，#212199／#213259 作者）09-07 review 四點，已全部處理，fixup commit `eb99a882d843`。
+
 分支 `complex-fold-fastmath`，base `f6a369fa4a57`，head `378e96fe4dfd`，2 個檔案 +74/−14。
 
 ## 問題
@@ -23,11 +25,11 @@
 | fold | 要求 | LLVM 對應 |
 |---|---|---|
 | add／sub 那三個 | 外層 op 有 `reassoc` **且** `nsz` | `InstructionSimplify.cpp` `simplifyFAddInst`／`simplifyFSubInst`：`FMF.noSignedZeros() && FMF.allowReassoc()` |
-| exp(log) | exp 與 log **都**有 `afn` | `SimplifyLibCalls.cpp` `optimizeLog`：`Log->isFast() && Arg->isFast()`（LLVM 要求全 fast，我只要 `afn`，比它鬆一點但語意對：afn 就是「允許用近似取代函式」） |
+| exp(log) | exp 有 `reassoc`（09-11 改，原本是兩邊 `afn`） | `InstructionSimplify.cpp:6660` `simplifyUnaryIntrinsic`：`case Intrinsic::exp: if (FMF.allowReassoc() && match(Op0, m_Intrinsic<Intrinsic::log>(...))) return X;`。第一版引的 `SimplifyLibCalls.cpp` `optimizeLog` 是 `log(exp)` 那條，引錯地方 |
 
 為什麼 `reassoc` 不夠要加 `nsz`：帶號零那個例子跟結合律無關，是零的符號被吃掉。LLVM 兩個都要，跟著要。
 
-程式碼：`arith::bitEnumContainsAll(getFastmath(), reassoc | nsz)` 包住原本的判斷；exp 那個要查 `logOp.getFastmath()`。檔案裡 `DivOp::fold` 已經用同一個寫法查 `nnan`（#176249），風格對得上。
+程式碼：`arith::bitEnumContainsAll(getFastmath(), reassoc | nsz)` 包住原本的判斷；exp 那個只查自己的 `reassoc`，不看 log。檔案裡 `DivOp::fold` 已經用同一個寫法查 `nnan`（#176249），風格對得上。
 
 ## 脈絡
 
@@ -37,12 +39,13 @@
 
 ## 測試
 
-既有三個正向測試加上 flag（`fastmath<reassoc,nsz>`／`fastmath<afn>`），各補一個 `_without_fast_math`：只給 `reassoc`、只給 `nsz`、只給 exp 的 `afn`、什麼都不給，四種缺法各佔一個。注意 canonicalize 會把常數換到右邊，rhs 那個測試的 CHECK 要寫 `complex.add %[[SUB]], %{{.*}}`。
+既有三個正向測試加上 flag（`fastmath<reassoc,nsz>`／exp 的 `fastmath<reassoc>`），各補一個 `_without_fast_math`：只給 `reassoc`、只給 `nsz`、`reassoc` 放在 log 不放在 exp、什麼都不給，四種缺法各佔一個。09-11 起 operand 全改成函式引數（matteo-rm 的 nit）：常數會被 canonicalize 換邊，引數不會，CHECK 就能寫死 `%[[A]]`／`%[[B]]`。
 
 Complex／ComplexToStandard／ComplexToLLVM／Arith／Math 共 51 個 lit 全過。
 
 ## 答辯
 
 - 「為什麼不直接刪掉」：有 flag 時這些 fold 是合法且有用的，arith 對 `addf(x, +0)` 也是有 `nsz` 才折，刪掉是過度反應。
-- 「為什麼 exp/log 只要 afn 不要 fast」：LLVM 的 `isFast()` 是歷史包袱，`afn` 的定義就是這件事；如果 reviewer 要 `fast` 我可以改，一行。
-- 「要不要也查內層 op 的 flag」：LLVM 只查外層（fadd／fsub 自己的 FMF），reassoc 授權的是「這個運算可以跟它的 operand 重新結合」。exp/log 例外，因為近似的是 log 那一步的結果。
+- 「為什麼 exp/log 是 `reassoc` 不是 `afn`」：matteo-rm 09-07 指出 `afn` 不夠：`log((NaN, 1.0))` 的虛部是 `atan2(1, NaN)` = NaN，不折得 (NaN, NaN)，折了得 (NaN, 1.0)；零和 inf 同理，log 在那裡沒有有限值。`afn` 只授權「用近似取代函式」，管不到定義域。LLVM 實數版 `exp(log(x))` 只查 exp 的 `reassoc`（`InstructionSimplify.cpp:6660`），x < 0 時同樣把 NaN 折成 x，所以 `reassoc` 在 LLVM 的慣例裡就涵蓋這件事。回覆裡留了退路：他要更嚴可以再加 `nnan`／`ninf`。
+- 「要不要也查內層 op 的 flag」：matteo-rm 09-07 也問了這題。LLVM 只查外層：`simplifyFAddInst` 查 `FMF.noSignedZeros() && FMF.allowReassoc()` 後直接 match 內層 `fsub`，不看它的 flag（`InstructionSimplify.cpp:6061`）。reassoc 授權的是「這個運算可以跟它的 operand 重新結合」。arith dialect 的 folder 沒有任何 `reassoc` 用法可比。回覆說明了這點並表示他要加也可以。
+- 第一版錯在哪：exp/log 那條引了 `SimplifyLibCalls.cpp` `optimizeLog`（那是 `log(exp)`，且它要求 `isFast()`），把「兩邊都 fast」翻成「兩邊都 afn」。正確的對應是 `InstructionSimplify.cpp` 的 `exp(log(x))`，只查 exp 的 `reassoc`。教訓：引 LLVM 規則前先確認方向（exp(log) 與 log(exp) 是兩條不同規則）。

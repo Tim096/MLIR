@@ -8,8 +8,8 @@
 我目前向 LLVM 官方專案提出過 **26 個程式碼修改**：
 
 - **6 個已正式合併**，成為 LLVM／MLIR 的一部分。
-- **3 個已通過 maintainer review**，測試也全部通過，正在等待合併。
-- **17 個正在 review**：一個處理不同硬體轉換路徑對 MXFP scale 的解讀分歧，一個把 AMD 硬體的 MXFP 轉換指令限制在它能精確計算的 scale 格式上，一個補上 2-bit 量化的向量截斷重寫，一個修正向量化時把會越界的讀寫標成安全的判斷，一個修正 GPU tensor core 的 matmul 後面接減法或取負時編譯器直接崩潰的問題，一個修正向量化器把 tensor 切片寫到錯誤位置的問題，一個修正混合精度矩陣乘法折疊產生不合法 IR 的問題，一個修正帶 mask 的向量讀寫經過迴圈展開後產生不合法 IR 的問題，七個修正記憶體存取改寫時遺失對齊與快取提示的問題（其中一個在位址移動後重新計算對齊），一個修正複數運算的化簡在沒有 fast-math 授權時就改變結果的問題。
+- **4 個已通過 maintainer review**，測試也全部通過，正在等待合併。
+- **16 個正在 review**：一個處理不同硬體轉換路徑對 MXFP scale 的解讀分歧，一個把 AMD 硬體的 MXFP 轉換指令限制在它能精確計算的 scale 格式上，一個補上 2-bit 量化的向量截斷重寫，一個修正向量化時把會越界的讀寫標成安全的判斷，一個修正 GPU tensor core 的 matmul 後面接減法或取負時編譯器直接崩潰的問題，一個修正向量化器把 tensor 切片寫到錯誤位置的問題，一個修正混合精度矩陣乘法折疊產生不合法 IR 的問題，一個修正帶 mask 的向量讀寫經過迴圈展開後產生不合法 IR 的問題，六個修正記憶體存取改寫時遺失對齊與快取提示的問題（其中一個在位址移動後重新計算對齊），一個修正複數運算的化簡在沒有 fast-math 授權時就改變結果的問題。
 - 另外提出過 **2 個技術問題報告**；其中 1 個已由我自己修好並合併。
 
 這些工作主要處理 AI compiler 在量化、向量運算和數值轉換時可能遇到的錯誤，包括：
@@ -24,8 +24,8 @@
 | 狀態 | 數量 | 代表成果 |
 |---|---:|---|
 | 已合併進 LLVM | **6** | FP8、MXFP 常數最佳化、整數邊界、Vector mask、LLVM 浮點核心 |
-| 已通過 review | **3** | 跨後端整數正確性、GPU MMA 轉置 store、MemRef 轉型省略時保留存取屬性 |
-| Review 中 | **17** | MXFP scale 語意統一、AMDGPU MXFP 指令的 scale 格式限制、2-bit 向量截斷、向量化 in_bounds 越界判斷、tensor core elementwise epilogue 崩潰、insert_slice 向量化寫錯位置、混合精度 contract 折疊、帶 mask 的向量讀寫展開、AMDGPU／GPU／MemRef／Vector 記憶體存取屬性保留（七項，含位址移動後重算對齊）、複數運算化簡的 fast-math 檢查 |
+| 已通過 review | **4** | 跨後端整數正確性、GPU MMA 轉置 store、MemRef 轉型省略與 GPU memref 分解時保留存取屬性 |
+| Review 中 | **16** | MXFP scale 語意統一、AMDGPU MXFP 指令的 scale 格式限制、2-bit 向量截斷、向量化 in_bounds 越界判斷、tensor core elementwise epilogue 崩潰、insert_slice 向量化寫錯位置、混合精度 contract 折疊、帶 mask 的向量讀寫展開、AMDGPU／MemRef／Vector 記憶體存取屬性保留（六項，含位址移動後重算對齊）、複數運算化簡的 fast-math 檢查 |
 | 技術 Issue | **2** | 浮點 crash、MXFP 不同 lowering 結果不一致 |
 
 ## 已正式合併的 6 項貢獻
@@ -352,10 +352,11 @@ gfx950 的 scaled conversion 指令只讀 scale 的指數位元，所以只有 s
 
 ## 下一步
 
-1. 推動三個已 approve 的 PR（#215696、#221248、#221314）合併，讓正式 upstream 貢獻由 6 個增加到 9 個。
+1. 推動四個已 approve 的 PR（#215696、#221248、#221312、#221314）合併，讓正式 upstream 貢獻由 6 個增加到 10 個。09-11 起每個都已明確請 approver 代為合併。
 2. 完成 #217892 與其 AMDGPU 側 #221386 的 review；兩者合起來讓 MXFP scale 在通用路徑與硬體路徑上的意義一致。
-3. 推進其餘 review 中的 PR。fast-math 掃描（`notes/fastmath-sweep.md`）還有四個排好順序的候選，`notes/attr-drop-sweep.md` 剩兩組 narrow-type emulation 要重算對齊。
-4. 把目前用過的枚舉與語意驗證方法整理成自動化工具，用來系統性尋找更多 compiler correctness bug。
+3. #221293：main 上 09-05 合併的另一個修正仍會把中間維度被移除的 tensor 切片寫到錯的位置（已用執行結果證明），正在與該修正的作者討論是補前置條件還是讓寫回帶 permutation map；後者是下一個較大的修正。
+4. 推進其餘 review 中的 PR。fast-math 掃描（`notes/fastmath-sweep.md`）還有四個排好順序的候選，`notes/attr-drop-sweep.md` 剩兩組 narrow-type emulation 要重算對齊。
+5. 把目前用過的枚舉與語意驗證方法整理成自動化工具，用來系統性尋找更多 compiler correctness bug。
 
 ## 一句話總結
 
