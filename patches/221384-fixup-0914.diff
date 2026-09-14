@@ -1,0 +1,220 @@
+diff --git a/mlir/lib/Dialect/Complex/IR/ComplexOps.cpp b/mlir/lib/Dialect/Complex/IR/ComplexOps.cpp
+index e99de97ae105..65c92d0e7e0a 100644
+--- a/mlir/lib/Dialect/Complex/IR/ComplexOps.cpp
++++ b/mlir/lib/Dialect/Complex/IR/ComplexOps.cpp
+@@ -253,16 +253,20 @@ void ReOp::getCanonicalizationPatterns(RewritePatternSet &results,
+ OpFoldResult AddOp::fold(FoldAdaptor adaptor) {
+   // complex.add(complex.sub(a, b), b) -> a
+   // complex.add(b, complex.sub(a, b)) -> a
+-  // The intermediate result is rounded, so this needs `reassoc`, and
+-  // (-0.0 - b) + b is +0.0, so it also needs `nsz`.
++  // The intermediate result is rounded, so both ops need `reassoc`, and
++  // (-0.0 - b) + b is +0.0, so the add also needs `nsz`.
+   if (arith::bitEnumContainsAll(getFastmath(), arith::FastMathFlags::reassoc |
+                                                    arith::FastMathFlags::nsz)) {
+     if (auto sub = getLhs().getDefiningOp<SubOp>())
+-      if (getRhs() == sub.getRhs())
++      if (getRhs() == sub.getRhs() &&
++          arith::bitEnumContainsAll(sub.getFastmath(),
++                                    arith::FastMathFlags::reassoc))
+         return sub.getLhs();
+ 
+     if (auto sub = getRhs().getDefiningOp<SubOp>())
+-      if (getLhs() == sub.getRhs())
++      if (getLhs() == sub.getRhs() &&
++          arith::bitEnumContainsAll(sub.getFastmath(),
++                                    arith::FastMathFlags::reassoc))
+         return sub.getLhs();
+   }
+ 
+@@ -284,12 +288,14 @@ OpFoldResult AddOp::fold(FoldAdaptor adaptor) {
+ 
+ OpFoldResult SubOp::fold(FoldAdaptor adaptor) {
+   // complex.sub(complex.add(a, b), b) -> a
+-  // The intermediate result is rounded, so this needs `reassoc`, and
+-  // (-0.0 + b) - b is +0.0, so it also needs `nsz`.
++  // The intermediate result is rounded, so both ops need `reassoc`, and
++  // (-0.0 + b) - b is +0.0, so the sub also needs `nsz`.
+   if (arith::bitEnumContainsAll(getFastmath(), arith::FastMathFlags::reassoc |
+                                                    arith::FastMathFlags::nsz))
+     if (auto add = getLhs().getDefiningOp<AddOp>())
+-      if (getRhs() == add.getRhs())
++      if (getRhs() == add.getRhs() &&
++          arith::bitEnumContainsAll(add.getFastmath(),
++                                    arith::FastMathFlags::reassoc))
+         return add.getLhs();
+ 
+   // complex.sub(a, complex.constant<0.0, 0.0>) -> a
+@@ -322,11 +328,16 @@ OpFoldResult NegOp::fold(FoldAdaptor adaptor) {
+ 
+ OpFoldResult ExpOp::fold(FoldAdaptor adaptor) {
+   // complex.exp(complex.log(a)) -> a
+-  // exp(log(a)) is only an approximation of a, and log(a) has no finite
+-  // result for a zero or non-finite a, so this needs `reassoc`.
++  // exp(log(a)) is only an approximation of a, so both ops need `reassoc`.
++  // log(a) is not finite for a zero or non-finite a, and its result depends
++  // on the sign of a zero, so the log also needs `nnan`, `ninf` and `nsz`.
+   if (arith::bitEnumContainsAll(getFastmath(), arith::FastMathFlags::reassoc))
+     if (auto logOp = getOperand().getDefiningOp<LogOp>())
+-      return logOp.getOperand();
++      if (arith::bitEnumContainsAll(
++              logOp.getFastmath(),
++              arith::FastMathFlags::reassoc | arith::FastMathFlags::nnan |
++                  arith::FastMathFlags::ninf | arith::FastMathFlags::nsz))
++        return logOp.getOperand();
+ 
+   return {};
+ }
+diff --git a/mlir/test/Dialect/Complex/canonicalize.mlir b/mlir/test/Dialect/Complex/canonicalize.mlir
+index 28fcf3a62e87..c487b3ca7f06 100644
+--- a/mlir/test/Dialect/Complex/canonicalize.mlir
++++ b/mlir/test/Dialect/Complex/canonicalize.mlir
+@@ -67,7 +67,7 @@ func.func @imag_of_create_op() -> f32 {
+ // CHECK-SAME: (%[[A:.*]]: complex<f32>, %[[B:.*]]: complex<f32>)
+ func.func @complex_add_sub_lhs(%a: complex<f32>, %b: complex<f32>) -> complex<f32> {
+   // CHECK-NEXT: return %[[A]] : complex<f32>
+-  %sub = complex.sub %a, %b : complex<f32>
++  %sub = complex.sub %a, %b fastmath<reassoc> : complex<f32>
+   %add = complex.add %sub, %b fastmath<reassoc,nsz> : complex<f32>
+   return %add : complex<f32>
+ }
+@@ -75,19 +75,30 @@ func.func @complex_add_sub_lhs(%a: complex<f32>, %b: complex<f32>) -> complex<f3
+ // CHECK-LABEL: func @complex_add_sub_lhs_without_fast_math
+ // CHECK-SAME: (%[[A:.*]]: complex<f32>, %[[B:.*]]: complex<f32>)
+ func.func @complex_add_sub_lhs_without_fast_math(%a: complex<f32>, %b: complex<f32>) -> complex<f32> {
+-  // CHECK: %[[SUB:.*]] = complex.sub %[[A]], %[[B]] : complex<f32>
++  // CHECK: %[[SUB:.*]] = complex.sub %[[A]], %[[B]] fastmath<reassoc> : complex<f32>
+   // CHECK: %[[ADD:.*]] = complex.add %[[SUB]], %[[B]] fastmath<reassoc> : complex<f32>
+   // CHECK-NEXT: return %[[ADD]] : complex<f32>
+-  %sub = complex.sub %a, %b : complex<f32>
++  %sub = complex.sub %a, %b fastmath<reassoc> : complex<f32>
+   %add = complex.add %sub, %b fastmath<reassoc> : complex<f32>
+   return %add : complex<f32>
+ }
+ 
++// CHECK-LABEL: func @complex_add_sub_lhs_without_inner_reassoc
++// CHECK-SAME: (%[[A:.*]]: complex<f32>, %[[B:.*]]: complex<f32>)
++func.func @complex_add_sub_lhs_without_inner_reassoc(%a: complex<f32>, %b: complex<f32>) -> complex<f32> {
++  // CHECK: %[[SUB:.*]] = complex.sub %[[A]], %[[B]] : complex<f32>
++  // CHECK: %[[ADD:.*]] = complex.add %[[SUB]], %[[B]] fastmath<reassoc,nsz> : complex<f32>
++  // CHECK-NEXT: return %[[ADD]] : complex<f32>
++  %sub = complex.sub %a, %b : complex<f32>
++  %add = complex.add %sub, %b fastmath<reassoc,nsz> : complex<f32>
++  return %add : complex<f32>
++}
++
+ // CHECK-LABEL: func @complex_add_sub_rhs
+ // CHECK-SAME: (%[[A:.*]]: complex<f32>, %[[B:.*]]: complex<f32>)
+ func.func @complex_add_sub_rhs(%a: complex<f32>, %b: complex<f32>) -> complex<f32> {
+   // CHECK-NEXT: return %[[A]] : complex<f32>
+-  %sub = complex.sub %a, %b : complex<f32>
++  %sub = complex.sub %a, %b fastmath<reassoc> : complex<f32>
+   %add = complex.add %b, %sub fastmath<reassoc,nsz> : complex<f32>
+   return %add : complex<f32>
+ }
+@@ -95,14 +106,25 @@ func.func @complex_add_sub_rhs(%a: complex<f32>, %b: complex<f32>) -> complex<f3
+ // CHECK-LABEL: func @complex_add_sub_rhs_without_fast_math
+ // CHECK-SAME: (%[[A:.*]]: complex<f32>, %[[B:.*]]: complex<f32>)
+ func.func @complex_add_sub_rhs_without_fast_math(%a: complex<f32>, %b: complex<f32>) -> complex<f32> {
+-  // CHECK: %[[SUB:.*]] = complex.sub %[[A]], %[[B]] : complex<f32>
++  // CHECK: %[[SUB:.*]] = complex.sub %[[A]], %[[B]] fastmath<reassoc> : complex<f32>
+   // CHECK: %[[ADD:.*]] = complex.add %[[B]], %[[SUB]] fastmath<nsz> : complex<f32>
+   // CHECK-NEXT: return %[[ADD]] : complex<f32>
+-  %sub = complex.sub %a, %b : complex<f32>
++  %sub = complex.sub %a, %b fastmath<reassoc> : complex<f32>
+   %add = complex.add %b, %sub fastmath<nsz> : complex<f32>
+   return %add : complex<f32>
+ }
+ 
++// CHECK-LABEL: func @complex_add_sub_rhs_without_inner_reassoc
++// CHECK-SAME: (%[[A:.*]]: complex<f32>, %[[B:.*]]: complex<f32>)
++func.func @complex_add_sub_rhs_without_inner_reassoc(%a: complex<f32>, %b: complex<f32>) -> complex<f32> {
++  // CHECK: %[[SUB:.*]] = complex.sub %[[A]], %[[B]] : complex<f32>
++  // CHECK: %[[ADD:.*]] = complex.add %[[B]], %[[SUB]] fastmath<reassoc,nsz> : complex<f32>
++  // CHECK-NEXT: return %[[ADD]] : complex<f32>
++  %sub = complex.sub %a, %b : complex<f32>
++  %add = complex.add %b, %sub fastmath<reassoc,nsz> : complex<f32>
++  return %add : complex<f32>
++}
++
+ // CHECK-LABEL: func @complex_neg_neg
+ func.func @complex_neg_neg() -> complex<f32> {
+   %complex1 = complex.constant [1.0 : f32, 0.0 : f32] : complex<f32>
+@@ -128,7 +150,7 @@ func.func @complex_log_exp() -> complex<f32> {
+ // CHECK-SAME: (%[[A:.*]]: complex<f32>)
+ func.func @complex_exp_log(%a: complex<f32>) -> complex<f32> {
+   // CHECK-NEXT: return %[[A]] : complex<f32>
+-  %log = complex.log %a : complex<f32>
++  %log = complex.log %a fastmath<reassoc,nnan,ninf,nsz> : complex<f32>
+   %exp = complex.exp %log fastmath<reassoc> : complex<f32>
+   return %exp : complex<f32>
+ }
+@@ -136,14 +158,29 @@ func.func @complex_exp_log(%a: complex<f32>) -> complex<f32> {
+ // CHECK-LABEL: func @complex_exp_log_without_fast_math
+ // CHECK-SAME: (%[[A:.*]]: complex<f32>)
+ func.func @complex_exp_log_without_fast_math(%a: complex<f32>) -> complex<f32> {
+-  // CHECK: %[[LOG:.*]] = complex.log %[[A]] fastmath<reassoc> : complex<f32>
++  // CHECK: %[[LOG:.*]] = complex.log %[[A]] fastmath<reassoc,nnan,ninf,nsz> : complex<f32>
+   // CHECK: %[[EXP:.*]] = complex.exp %[[LOG]] : complex<f32>
+   // CHECK-NEXT: return %[[EXP]] : complex<f32>
+-  %log = complex.log %a fastmath<reassoc> : complex<f32>
++  %log = complex.log %a fastmath<reassoc,nnan,ninf,nsz> : complex<f32>
+   %exp = complex.exp %log : complex<f32>
+   return %exp : complex<f32>
+ }
+ 
++// Each log is missing one of the flags the fold needs.
++// CHECK-LABEL: func @complex_exp_log_without_log_flags
++// CHECK-COUNT-4: complex.exp %{{.*}} fastmath<reassoc> : complex<f32>
++func.func @complex_exp_log_without_log_flags(%a: complex<f32>) -> (complex<f32>, complex<f32>, complex<f32>, complex<f32>) {
++  %log0 = complex.log %a fastmath<nnan,ninf,nsz> : complex<f32>
++  %exp0 = complex.exp %log0 fastmath<reassoc> : complex<f32>
++  %log1 = complex.log %a fastmath<reassoc,ninf,nsz> : complex<f32>
++  %exp1 = complex.exp %log1 fastmath<reassoc> : complex<f32>
++  %log2 = complex.log %a fastmath<reassoc,nnan,nsz> : complex<f32>
++  %exp2 = complex.exp %log2 fastmath<reassoc> : complex<f32>
++  %log3 = complex.log %a fastmath<reassoc,nnan,ninf> : complex<f32>
++  %exp3 = complex.exp %log3 fastmath<reassoc> : complex<f32>
++  return %exp0, %exp1, %exp2, %exp3 : complex<f32>, complex<f32>, complex<f32>, complex<f32>
++}
++
+ // CHECK-LABEL: func @complex_conj_conj
+ func.func @complex_conj_conj() -> complex<f32> {
+   %complex1 = complex.constant [1.0 : f32, 0.0 : f32] : complex<f32>
+@@ -168,7 +205,7 @@ func.func @complex_add_neg_zero() -> complex<f32> {
+ // CHECK-SAME: (%[[A:.*]]: complex<f32>, %[[B:.*]]: complex<f32>)
+ func.func @complex_sub_add_lhs(%a: complex<f32>, %b: complex<f32>) -> complex<f32> {
+   // CHECK-NEXT: return %[[A]] : complex<f32>
+-  %add = complex.add %a, %b : complex<f32>
++  %add = complex.add %a, %b fastmath<reassoc> : complex<f32>
+   %sub = complex.sub %add, %b fastmath<reassoc,nsz> : complex<f32>
+   return %sub : complex<f32>
+ }
+@@ -176,14 +213,25 @@ func.func @complex_sub_add_lhs(%a: complex<f32>, %b: complex<f32>) -> complex<f3
+ // CHECK-LABEL: func @complex_sub_add_lhs_without_fast_math
+ // CHECK-SAME: (%[[A:.*]]: complex<f32>, %[[B:.*]]: complex<f32>)
+ func.func @complex_sub_add_lhs_without_fast_math(%a: complex<f32>, %b: complex<f32>) -> complex<f32> {
+-  // CHECK: %[[ADD:.*]] = complex.add %[[A]], %[[B]] : complex<f32>
++  // CHECK: %[[ADD:.*]] = complex.add %[[A]], %[[B]] fastmath<reassoc> : complex<f32>
+   // CHECK: %[[SUB:.*]] = complex.sub %[[ADD]], %[[B]] : complex<f32>
+   // CHECK-NEXT: return %[[SUB]] : complex<f32>
+-  %add = complex.add %a, %b : complex<f32>
++  %add = complex.add %a, %b fastmath<reassoc> : complex<f32>
+   %sub = complex.sub %add, %b : complex<f32>
+   return %sub : complex<f32>
+ }
+ 
++// CHECK-LABEL: func @complex_sub_add_lhs_without_inner_reassoc
++// CHECK-SAME: (%[[A:.*]]: complex<f32>, %[[B:.*]]: complex<f32>)
++func.func @complex_sub_add_lhs_without_inner_reassoc(%a: complex<f32>, %b: complex<f32>) -> complex<f32> {
++  // CHECK: %[[ADD:.*]] = complex.add %[[A]], %[[B]] : complex<f32>
++  // CHECK: %[[SUB:.*]] = complex.sub %[[ADD]], %[[B]] fastmath<reassoc,nsz> : complex<f32>
++  // CHECK-NEXT: return %[[SUB]] : complex<f32>
++  %add = complex.add %a, %b : complex<f32>
++  %sub = complex.sub %add, %b fastmath<reassoc,nsz> : complex<f32>
++  return %sub : complex<f32>
++}
++
+ // CHECK-LABEL: func @complex_sub_zero
+ func.func @complex_sub_zero() -> complex<f32> {
+   %complex1 = complex.constant [1.0 : f32, 0.0 : f32] : complex<f32>
