@@ -9,7 +9,7 @@
 >
 > 新 session 開場建議直接說：「讀 Goal.md 和 TODO.md，然後接續」。
 
-最後更新：2026-09-14
+最後更新：2026-09-15
 
 ---
 
@@ -18,7 +18,7 @@
 **七個 commit 已進 upstream（#221314 09-14 由 ioghiban merge）。十九個 open PR，三個已 approve 等 merge：#215696（kuhar）、#221248（mplatings）、#221312（krzysz00）。**
 **⚠️ 09-13 banach-space 在 #221383 公開提醒：兩天開約 17 個 PR 太多，要限制同時 open 的數量、多 review 別人的。→ 停開新 PR；原定 09-14 ping 09-05 那批七個，取消。**
 **⚠️ AI 揭露：#221307（FedericoBruzzone 09-11）、#221312（fabianmcg 09-13）要求揭露 AI 使用 → 只補這兩個 PR 的 body（`Assisted-by:`），其餘有人問再補（本人 09-14 決定）。**
-**待回 review：#221307（測試沒測到 guard、命名、1-D 測試跟 `@masked_transfer_read` 差在哪）、#221384（matteo-rm 09-14 定了 flag）。#221293 等 banach-space 拍板。tgymnich 在 #223286 cc 我，點名做 APFloat 無號 FP8 的 follow-up。回覆草稿：[`patches/2026-09-14-replies.md`](patches/2026-09-14-replies.md)。**
+**09-14 fixup＋回覆都已貼（#221307、#221384），等回應。#221293 等 banach-space 拍板。tgymnich 在 #223286 cc 我，點名做 APFloat 無號 FP8 的 follow-up。已 review 五個別人的 PR（#223316、#223286、#220020、#206249、#217087），開了 issue #223478。草稿：[`patches/2026-09-14-replies.md`](patches/2026-09-14-replies.md)、[`patches/2026-09-15-reviews.md`](patches/2026-09-15-reviews.md)。**
 **08-21 → 09-04 兩週三個 PR 都沒人回，09-04 全部 rebase 到當天 main、回掉 krzysz00 的 nit，再各 ping 一次；#215123 當天就進了，#221248 送出當天就被 approve。**
 **⚠️ 原則不變：已 approve 未 merge 就禮貌 ping，每次都要帶新資訊。**
 
@@ -51,6 +51,22 @@
 | [#221385](https://github.com/llvm/llvm-project/pull/221385) | VA-1：`ExtractOpFromLoad`／`UnrollLoad`／`UnrollStore` 索引會移，alignment 用新 helper `vector::getAlignmentAfterOffset`（`commonAlignment(A, byteOffset)`，stride／offset 動態就丟）重算，`nontemporal` 直轉 | 🆕 **2026-09-05 送出**，head `c2086dd854a5`，6 個檔案 +168/−6，全樹 check-mlir 4588／16 同基準。留言（5549124992）點名 Hardcode84、nbpatel、banach-space、kuhar | 跑中 |
 | [#221386](https://github.com/llvm/llvm-project/pull/221386) | M1-f：`ArithToAMDGPU` 對 scale 型別零檢查，硬體只讀 exponent；改成只認 `f8E8M0FNU`（其餘留給 `arith-expand`），並把 `arith.truncf ... toward_zero : f32 to f8E8M0FNU` 折進指令。#215295 krzysz00 的建議、#217892 的 AMDGPU 側 | 🆕 **2026-09-05 送出**，head `3cc500a59ae0`，3 個檔案 +134/−30。留言（5549169899）點名 krzysz00、tgymnich、Muzammiluddin-Syed-ECE、kuhar，並問要不要改成 pass 內自己展開 | 跑中 |
 
+### 📌 2026-09-15：兩則 review（#206249、#217087）、開 PPC issue #223478、兩封 buildbot 信
+
+**Buildbot 兩封信都不是 #221248 造成的**：builder 203 `amdgpu-offload-ubuntu-22-cmake-build-only` #59798 blamelist 只有 `8e6039458ad0`，但 cmake step 被 cancel、`ninja: error: loading 'build.ninja'`，之後每個 build 都在 `update-annotated-scripts` 失敗（`pathspec 'FETCH_HEAD'`）；builder 230 `amdgpu-hip-tpl` #7970 blamelist 四個 commit，LLVM 編過，Kokkos 從 test #5 起 40 個 0.21 秒 segfault，連 Serial 的也掛，之後的 build 同樣卡 update。兩個 AMD worker 同時壞，infra。`mlir-rocm-mi200` #41182 含同一 commit 是綠的。不留言。
+
+**#206249（mygitljf，ceil/floor 展開改純 Arith，修 #206091）**：PR squashed diff 套在 `723587b250b0`（`arith-to-llvm.mlir` 衝突一處手動解），build `mlir-opt`＋`mlir-runner`。Python 窮舉 i8 三個公式 0 mismatch；`mlir-runner` 跑 16 組 signed＋16 組 unsigned 邊界值（INT_MIN／INT_MAX／UINT_MAX）48 個值全對；reproducer 不再 assert；lit 147/147；既有 `test-arith-expand-ceildivsi.mlir` PASS。兩個測試問題：① 與 main 衝突——#212074（自己的 commit）起 `x, x` fold 成 1，而 dialect conversion 預設 `foldingMode = BeforePatterns`（`DialectConversion.cpp` L2604）先 fold 再套 pattern，PR 的 `@ceildivui %arg0, %arg0` rebase 後實測輸出 `llvm.mlir.constant(1)`；② 新加 `VALUES` 測試 operand 全是常數，走 folder 不走展開，main 上 `-canonicalize` 輸出一模一樣，建議照 integration test 用 `func.call`。**已貼**（pullrequestreview-5201061015）。
+
+**#217087（ivanradanov，fastmath 旗標文件）**：kuhar 08-18 要 self-contained，一個月沒動。查證：`mlir-tblgen -gen-dialect-doc` 對比，文字落在 `FastMathFlagsAttr` Syntax 下面、沒蓋掉東西；arith fold 已用 `nsz`／`nnan`／`contract`／`ninf`，`AttrToLLVMConverter.cpp` 七旗標 1:1；`addi` 的 `nsw`／`nuw` 就是 self-contained 寫法。貼了一份用 arith 字彙寫的 8 旗標定義草稿（照 LangRef.md L4392–4495 翻）當起點。**已貼**（pullrequestreview-5201061289）。
+
+**PPC issue 已開**：[#223478](https://github.com/llvm/llvm-project/issues/223478)（`convertFromString("1e400", rmTowardZero)` assert；TowardZero 下 max+max／max×max 得 `+Inf`）。
+
+**本機事故**：砍掉正在重跑 cmake 的 ninja，`build/build.ninja` 被砍；`cd build && cmake .` 用既有 cache 重生（設定沒變），mlir-opt 已重建回 HEAD，工作樹乾淨。教訓：cherry-pick 衝突時別先啟動 build。
+
+草稿與證據：[`patches/2026-09-15-reviews.md`](patches/2026-09-15-reviews.md)、`scratchpad/pr206249/exec.{mlir,expected,out}`。
+
+**下一步**：⑤#221293 等 banach-space ⑥等 #221307／#221384／#221312 的回應 ⑦#223286 landed 後做 APFloat follow-up ⑧看 #206249／#217087／#223478 有沒有回應。
+
 ### 📌 2026-09-14：第七個 merge、banach-space 的量能警告、AI 揭露
 
 **Merge**：#221314（ioghiban，`77a26fadb88b`）。09-11 明講請他 land，三天後 merge。
@@ -71,7 +87,7 @@
 
 **開始 review 別人的 PR**（banach-space 的建議）：草稿 [`patches/2026-09-14-reviews.md`](patches/2026-09-14-reviews.md)——#223316（scalable mask emulation，本機證實掉 lane；提 `negative_` 命名）、#223286（原作者確認 -1.0 的理由；根因是 `convert()` 不清 sign，`bitwiseIsEqual`／`hash_value` 仍分得出 ±1.0，也是 follow-up 的方向）。**09-14 已貼**（pullrequestreview-5199881469、-5199881700）。原則：用 Comment 不按 Approve；每點都本機驗證過才寫。
 #220020（APFloat directed rounding 不報 overflow）**09-15 已貼**（pullrequestreview-5200112595）：四點——`DoubleAPFloat::handleOverflow` 同款沒改到（PPC `convertFromAPInt(2^1100, TowardZero)` 實測 `ovf=0`）、FiniteOnly 排除與現況一致（四種 rounding 都不報）要寫進註解、clang `FENV_ROUND` 字面值會開始 `warn_float_overflow` 建議加測試、FP8 列超過 80 欄。探針 `scratchpad/apf/probe3.cpp` 連 `libLLVMSupport.so`（要 `-fno-rtti`）。**順帶發現兩個既有 PPC double-double bug**（與 PR 無關）：`convertFromString("1e400", rmTowardZero)` assert crash（`convertPPCDoubleDoubleLegacyAPFloatToAPInt` L3489）；TowardZero 下 max+max／max×max 得 `+Inf` 且不報 overflow。issue 草稿（未開，重現程式已實跑）：[`patches/ppc-double-double-toward-zero-issue.md`](patches/ppc-double-double-toward-zero-issue.md)。
-下一批候選：#206249（ceil/floor 展開，查 INT_MIN 一致性）、#217087（fastmath 文件）。
+下一批候選：#206249（ceil/floor 展開，查 INT_MIN 一致性）、#217087（fastmath 文件）→ 見 09-15。
 
 **下一步**：⑤#221293 等 banach-space ⑥等 #221307／#221384／#221312 的回應 ⑦#223286 landed 後做 APFloat follow-up（清 `convert()` 的 sign）。
 

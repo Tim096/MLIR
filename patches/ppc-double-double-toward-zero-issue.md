@@ -1,6 +1,6 @@
 # Issue 草稿：PPC double-double 在 rmTowardZero 下 overflow 的兩個既有 bug
 
-**未開**。與 #220020 無關（兩者在不含 #220020 的 main `723587b250b0` 上都重現），在 #220020 review 時順帶發現。
+**已開（09-15）：https://github.com/llvm/llvm-project/issues/223478**。與 #220020 無關（兩者在不含 #220020 的 main `723587b250b0` 上都重現），在 #220020 review 時順帶發現。
 探針原檔：`scratchpad/apf/probe3.cpp`（連 `build/lib/libLLVMSupport.so`，要 `-fno-rtti`）。
 
 ---
