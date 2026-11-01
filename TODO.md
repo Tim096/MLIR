@@ -9,12 +9,13 @@
 >
 > 新 session 開場建議直接說：「讀 Goal.md 和 TODO.md，然後接續」。
 
-最後更新：2026-10-08
+最後更新：2026-11-01
 
 ---
 
 ## 一句話現況
 
+**11-01：十一個 commit 已進 upstream（10-08 #221384、10-16 #221293）。五個 PR 的 review 都回了（fixup 已 push、回覆已貼），另開 issue #237728。實際內容見 [`patches/2026-11-01-replies.md`](patches/2026-11-01-replies.md)。下表狀態為 10-08 實查，最新見下方 11-01 段落。**
 **九個 commit 已進 upstream。十四個 open PR（10-08：關 5 個轉傳屬性 PR、新開 #230085、#230086）。三個在等 merge：#215696（kuhar，10-08 rebase＋請 land）、#221384（matteo-rm，10-08 請 land）。**
 **10-08 全部處理完：#221293 縮成只剩 stride 檢查（force-push＋改標題描述＋回覆）；#217087 改由我送成 #230085；APFloat 無號 FP8 follow-up 送成 #230086（@tgymnich）；回 #223316、#220020（都先本機驗證）。草稿與實際送出內容：[`patches/2026-10-08-replies.md`](patches/2026-10-08-replies.md)。**
 **還沒送：合併版屬性 PR（分支 `vector-memref-keep-attrs`，等 vector 那邊有 PR 進了再送）；#221386 的 rebase（分支 `rebase/amdgpu-scaling-e8m0-scale`，沒人回過，有人回再推）。**
@@ -53,6 +54,25 @@
 | [#221386](https://github.com/llvm/llvm-project/pull/221386) | M1-f：`ArithToAMDGPU` 對 scale 型別零檢查，硬體只讀 exponent；改成只認 `f8E8M0FNU`（其餘留給 `arith-expand`），並把 `arith.truncf ... toward_zero : f32 to f8E8M0FNU` 折進指令。#215295 krzysz00 的建議、#217892 的 AMDGPU 側 | 🆕 **2026-09-05 送出**，head `3cc500a59ae0`，3 個檔案 +134/−30。留言（5549169899）點名 krzysz00、tgymnich、Muzammiluddin-Syed-ECE、kuhar，並問要不要改成 pass 內自己展開 | 跑中 |
 | [#230085](https://github.com/llvm/llvm-project/pull/230085) | 🆕 fastmath 旗標的 self-contained 定義（`ArithBase.td` +32），取代 #217087（ivanradanov 10-07 要我自己送） | 🆕 **2026-10-08 送出**，head `a2589de0a682`。比 09-15 草稿多改三處：補 `afn` 為 rewrite-based、`nsz` 只講 operand、拿掉「follows IEEE 754」 | 跑中 |
 | [#230086](https://github.com/llvm/llvm-project/pull/230086) | 🆕 APFloat：無號格式（E8M0FNU／E5M3FNU）的負值變 NaN＋`opInvalidOp`，負零／負 NaN 只丟 sign；修 `-Inf`／`-NaN` convert assert、`1.0 - 1.5` 得 `-0.5`。#223286 的 follow-up | 🆕 **2026-10-08 送出**，head `24127a2345d7`，留言 @tgymnich（說明為何不照 09-14 說的清 sign，改照 #216387）。推翻 #107127／#210720 兩個 subtract death test | 跑中 |
+
+### 🧰 2026-11-01：五個 PR 的 fixup 與回覆（都已送出）
+
+**10-08 → 11-01 GitHub 實查**：#221384（JDPailleux 10-08）、#221293（banach-space 10-16）merge，共十一個 commit。#217087 已關。#223316、#226490 已 merge。#220020 仍 open。StableHLO RFC（openxla/stablehlo#3050，已關未 merge）提案負值轉無號格式為 NaN，patrikf 10-27 貼到 #230086。
+
+**已 push 的 head**：#230085 `ba747baf7e5a`、#221185 `ca4d552edb05`、#230086 `bd980b05888f`、#221385 `5ce9b2287292`（force-push 被 Claude Code 權限機制擋下，改成 merge `5f890fc6161a` 進舊 head 再疊 fixup，一般 push；最終 tree 與驗證版相同，之後多一個 commit 拿掉搬移留下的兩個 include，Vector／MemRef lit 137 個全過）、#221268 `d37b215a74d9`。
+
+**實查到的事**：
+- #230086：`remainder` 的中間值會是負的，只有 E5M3 會 assert（13225／65536 組）。改在同佈局的 signed semantics 計算。修後兩個格式全部 bit pattern 無 crash，且與 `std::remainder` 一致。探針：`add`／`subtract`／`multiply`／`divide`／`mod`／`remainder`／`roundToIntegral`／`next` 全組合，`fusedMultiplyAdd` 取樣。
+- #221385：`vector.load`／`store` 的 verifier 拒收負 stride，negative stride 測試寫不出來，改加 overflow 測試。
+- #221268：兩個函式互相遞迴，改名後 forward declaration 仍要留。只有 `affine-super-vectorize` 傳 map，且向量固定大小，scalable guard 沒有測試走得到。
+
+**驗證**：五個疊在 `5f890fc6161a`（`wip/stack-1101`）：check-mlir 4360 過、16 失敗；乾淨 main 上同樣 16 個失敗（全是 CUDA，含 `Integration/Dialect/Vector/GPU/CUDA/` 兩個，10-08 寫「全在 Integration/GPU/CUDA」不精確）。APFloat 196／196。五個分支對 `origin/main`（`1f3df6995837`）用 merge-tree 查無衝突。
+
+**issue #237728**：`next(nextDown=true)` 在兩個無號格式回傳負值（E5M3 的 0、E8M0 的最小值），既有行為，非 #230086 範圍。issue 裡的重現程式已在 main 實跑。
+
+**下一步**：①等 kuhar、tgymnich、FedericoBruzzone 回應 ②#215696 還在等 merge，下次 ping 要帶新資訊 ③#223478 的 PPC `max+max` 疑點還沒確認 ④#221386 有人回再推 rebase ⑤vector 有 PR 進了再送合併屬性 PR。
+
+**分支操作的教訓**：切舊基底分支會動到數千個檔案的 mtime，整批重編；舊基底的 fixup 要用 `~/llvm-wt` worktree 接回。腳本裡 cherry-pick 失敗後不要繼續 `git branch -f`。
 
 ### 🔧 2026-10-08：本機同步到最新、四件待回全部處理、開兩個 PR
 
