@@ -70,7 +70,9 @@
 
 **issue #237728**：`next(nextDown=true)` 在兩個無號格式回傳負值（E5M3 的 0、E8M0 的最小值），既有行為，非 #230086 範圍。issue 裡的重現程式已在 main 實跑。
 
-**下一步**：①等 kuhar、tgymnich、FedericoBruzzone 回應 ②#215696 還在等 merge，下次 ping 要帶新資訊 ③#223478 的 PPC `max+max` 疑點還沒確認 ④#221386 有人回再推 rebase ⑤vector 有 PR 進了再送合併屬性 PR。
+**同日 ping（本人指示：超過三週的都 ping）**：#215696（kuhar、krzysz00，請 land）、#217892、#221288、#221298（改找 FedericoBruzzone，不點 banach-space）、#221307、#221308、#221386。#221386 先 merge main 解 #219195 的衝突，head `6e47209fee7a`，tree 與 10-08 驗證的 rebase 版相同，ArithToAMDGPU／Arith lit 39 個全過。這批 ping 與 09-14 在 #221383 的承諾「不 ping 沒人接的」不一致，本人決定。
+
+**下一步**：①等上述 reviewer 回應 ②#223478 的 PPC `max+max` 疑點還沒確認 ③vector 有 PR 進了再送合併屬性 PR。
 
 **分支操作的教訓**：切舊基底分支會動到數千個檔案的 mtime，整批重編；舊基底的 fixup 要用 `~/llvm-wt` worktree 接回。腳本裡 cherry-pick 失敗後不要繼續 `git branch -f`。
 
