@@ -9,12 +9,13 @@
 >
 > 新 session 開場建議直接說：「讀 Goal.md 和 TODO.md，然後接續」。
 
-最後更新：2026-11-01
+最後更新：2026-11-16
 
 ---
 
 ## 一句話現況
 
+**11-16：十二個 commit 已進 upstream（11-09 #221307）。十一個 open PR，十個已 merge main 並 ping，#221268 讓給 dhairyashilRG 的 SuperVectorize switch。詳見下方 11-16 段落。**
 **11-01：十一個 commit 已進 upstream（10-08 #221384、10-16 #221293）。五個 PR 的 review 都回了（fixup 已 push、回覆已貼），另開 issue #237728。實際內容見 [`patches/2026-11-01-replies.md`](patches/2026-11-01-replies.md)。下表狀態為 10-08 實查，最新見下方 11-01 段落。**
 **九個 commit 已進 upstream。十四個 open PR（10-08：關 5 個轉傳屬性 PR、新開 #230085、#230086）。三個在等 merge：#215696（kuhar，10-08 rebase＋請 land）、#221384（matteo-rm，10-08 請 land）。**
 **10-08 全部處理完：#221293 縮成只剩 stride 檢查（force-push＋改標題描述＋回覆）；#217087 改由我送成 #230085；APFloat 無號 FP8 follow-up 送成 #230086（@tgymnich）；回 #223316、#220020（都先本機驗證）。草稿與實際送出內容：[`patches/2026-10-08-replies.md`](patches/2026-10-08-replies.md)。**
@@ -54,6 +55,23 @@
 | [#221386](https://github.com/llvm/llvm-project/pull/221386) | M1-f：`ArithToAMDGPU` 對 scale 型別零檢查，硬體只讀 exponent；改成只認 `f8E8M0FNU`（其餘留給 `arith-expand`），並把 `arith.truncf ... toward_zero : f32 to f8E8M0FNU` 折進指令。#215295 krzysz00 的建議、#217892 的 AMDGPU 側 | 🆕 **2026-09-05 送出**，head `3cc500a59ae0`，3 個檔案 +134/−30。留言（5549169899）點名 krzysz00、tgymnich、Muzammiluddin-Syed-ECE、kuhar，並問要不要改成 pass 內自己展開 | 跑中 |
 | [#230085](https://github.com/llvm/llvm-project/pull/230085) | 🆕 fastmath 旗標的 self-contained 定義（`ArithBase.td` +32），取代 #217087（ivanradanov 10-07 要我自己送） | 🆕 **2026-10-08 送出**，head `a2589de0a682`。比 09-15 草稿多改三處：補 `afn` 為 rewrite-based、`nsz` 只講 operand、拿掉「follows IEEE 754」 | 跑中 |
 | [#230086](https://github.com/llvm/llvm-project/pull/230086) | 🆕 APFloat：無號格式（E8M0FNU／E5M3FNU）的負值變 NaN＋`opInvalidOp`，負零／負 NaN 只丟 sign；修 `-Inf`／`-NaN` convert assert、`1.0 - 1.5` 得 `-0.5`。#223286 的 follow-up | 🆕 **2026-10-08 送出**，head `24127a2345d7`，留言 @tgymnich（說明為何不照 09-14 說的清 sign，改照 #216387）。推翻 #107127／#210720 兩個 subtract death test | 跑中 |
+
+### 📌 2026-11-16：一個 merge、#221268 讓出、十個 PR merge main 後 ping
+
+**11-01 → 11-16 GitHub 實查**：#221307 merge（FedericoBruzzone 11-07、banach-space 11-09 approve，Federico 代 merge）。其餘 open PR 在 11-01 的回覆／ping 之後零回應，除了下面三個。
+
+- **#221268**：dhairyashilRG 11-11／11-14 說他有 SuperVectorize 改用 mask 的分支（#227821 的一列），進了之後本 PR 不需要；FedericoBruzzone 贊成。本人決定讓他送。已回覆（issuecomment-6910228193）：他的進了就關這個。banach-space 11-03 兩則 inline 也回了：forward declaration 是因為兩個函式互相呼叫；`ReshapePatterns.cpp` 的 `isMultipleOf` 只認常數與 `affine.apply`，不認 `affine.for` 的 induction variable。**待辦：他的 PR 進了就關 #221268。**
+- **#221298**：FedericoBruzzone 11-04 要 `negative_` 前綴。兩個測試改名，head `bcf02cd9dcdc`。
+- **#215696**：與 #238124（Hardcode84，11-03 進）衝突。那個 PR 改善 signed div/rem 的範圍推導，並替舊的 INT_MIN 結果補了 workaround 與 unit test（`InferIntRangeInterfaceTest.cpp`）。解法：`inferCeilDivS` 衝突段取本 PR 這側（兩個 workaround 都拿掉），`inferDivSRange` 的改善保留；另一個 commit 改 unit test 期望值（exhaustive 的參考值拿掉 `-quotient` 特例；`SignedCeilDivMinDividend` 三組改成數學上的 ceil）。head `5346aa1644c9`，舊 head 備份 `backup/index-ceildivs-premerge-1116`。留言點名 Hardcode84 看 unit test、請 kuhar land。
+- **#221185**：GitHub 顯示無衝突，但 merge main 後編不過——#238070 把 `DeinterleaveOp` 的 `getRes1`／`getRes2` 改名為 `getResultEven`／`getResultOdd`。改六處，head `0d34a880862c`。
+
+**其餘只 merge main**（本人指示：超過兩週的都 rebase＋ping；用 merge 不用 rebase，一般 push）：#230085 `fd9efeb8a922`、#230086 `3d794001e9f6`、#221385 `49cb12380535`、#217892 `5a946f3c59a8`、#221288 `44b5c214acd9`、#221308 `a8153c7dd1ee`、#221386 `e6adeb0efa04`。
+
+**驗證**：十個分支的 diff 疊在 `376f04dd8bdb`（`wip/stack-1116`）：check-mlir 4639 過、16 失敗，16 個全是 CUDA（清單與 11-01 相同；這次沒有另外在乾淨 main 上跑基準）。APFloat 199／199，`IntRange*` unit test 11／11。log：`~/llvm-project/build/stack-1116b.log`。
+
+**做法**：worktree 停在 `origin/main`，`git merge --no-commit <branch>` 後用 `commit-tree` 把 parent 順序換成（branch, main），不必 checkout 舊分支。衝突時 `git checkout --theirs` 會把整個檔換成分支版、丟掉 main 的非衝突改動，要用 `git checkout -m` 還原後只改衝突段。
+
+**下一步**：①等 reviewer 回應 ②dhairyashilRG 的 switch 進了就關 #221268 ③#223478、#237728 仍無回應。
 
 ### 🧰 2026-11-01：五個 PR 的 fixup 與回覆（都已送出）
 
