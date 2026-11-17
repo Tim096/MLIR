@@ -1,0 +1,356 @@
+## arith.addi i4 pairs=256 defined=256 unfolded=0  
+  fold_wrong: 0
+  exec_wrong: 0
+  exec_trap: 0
+  fold_undef: 0
+## arith.subi i4 pairs=256 defined=256 unfolded=0  
+  fold_wrong: 0
+  exec_wrong: 0
+  exec_trap: 0
+  fold_undef: 0
+## arith.muli i4 pairs=256 defined=256 unfolded=0  
+  fold_wrong: 0
+  exec_wrong: 0
+  exec_trap: 0
+  fold_undef: 0
+## arith.divsi i4 pairs=256 defined=239 unfolded=0  
+  fold_wrong: 0
+  exec_wrong: 0
+  exec_trap: 0
+  fold_undef: 1
+    (0, 0, 0)
+## arith.divui i4 pairs=256 defined=240 unfolded=0  
+  fold_wrong: 0
+  exec_wrong: 0
+  exec_trap: 0
+  fold_undef: 1
+    (0, 0, 0)
+## arith.remsi i4 pairs=256 defined=239 unfolded=0  
+  fold_wrong: 0
+  exec_wrong: 0
+  exec_trap: 0
+  fold_undef: 2
+    (-8, -1, 0)
+    (0, 0, 0)
+## arith.remui i4 pairs=256 defined=240 unfolded=0  
+  fold_wrong: 0
+  exec_wrong: 0
+  exec_trap: 0
+  fold_undef: 1
+    (0, 0, 0)
+## arith.ceildivsi i4 pairs=256 defined=239 unfolded=0  
+  fold_wrong: 0
+  exec_wrong: 0
+  exec_trap: 0
+  fold_undef: 1
+    (0, 0, 0)
+## arith.ceildivui i4 pairs=256 defined=240 unfolded=0  
+  fold_wrong: 0
+  exec_wrong: 0
+  exec_trap: 0
+  fold_undef: 1
+    (0, 0, 0)
+## arith.floordivsi i4 pairs=256 defined=239 unfolded=0  
+  fold_wrong: 0
+  exec_wrong: 0
+  exec_trap: 0
+  fold_undef: 1
+    (0, 0, 0)
+## arith.shli i4 pairs=256 defined=64 unfolded=0  
+  fold_wrong: 0
+  exec_wrong: 0
+  exec_trap: 0
+  fold_undef: 12
+    (0, -8, 0)
+    (0, -7, 0)
+    (0, -6, 0)
+    (0, -5, 0)
+    (0, -4, 0)
+    (0, -3, 0)
+    (0, -2, 0)
+    (0, -1, 0)
+    (0, 4, 0)
+    (0, 5, 0)
+    (0, 6, 0)
+    (0, 7, 0)
+## arith.shrsi i4 pairs=256 defined=64 unfolded=0  
+  fold_wrong: 0
+  exec_wrong: 0
+  exec_trap: 0
+  fold_undef: 35
+    (-8, -8, 0)
+    (-7, -7, 0)
+    (-6, -6, 0)
+    (-5, -5, 0)
+    (-4, -4, 0)
+    (-3, -3, 0)
+    (-2, -2, 0)
+    (-1, -8, -1)
+    (-1, -7, -1)
+    (-1, -6, -1)
+    (-1, -5, -1)
+    (-1, -4, -1)
+## arith.shrui i4 pairs=256 defined=64 unfolded=0  
+  fold_wrong: 0
+  exec_wrong: 0
+  exec_trap: 0
+  fold_undef: 24
+    (-8, -8, 0)
+    (-7, -7, 0)
+    (-6, -6, 0)
+    (-5, -5, 0)
+    (-4, -4, 0)
+    (-3, -3, 0)
+    (-2, -2, 0)
+    (-1, -1, 0)
+    (0, -8, 0)
+    (0, -7, 0)
+    (0, -6, 0)
+    (0, -5, 0)
+## arith.maxsi i4 pairs=256 defined=256 unfolded=0  
+  fold_wrong: 0
+  exec_wrong: 0
+  exec_trap: 0
+  fold_undef: 0
+## arith.minsi i4 pairs=256 defined=256 unfolded=0  
+  fold_wrong: 0
+  exec_wrong: 0
+  exec_trap: 0
+  fold_undef: 0
+## arith.maxui i4 pairs=256 defined=256 unfolded=0  
+  fold_wrong: 0
+  exec_wrong: 0
+  exec_trap: 0
+  fold_undef: 0
+## arith.minui i4 pairs=256 defined=256 unfolded=0  
+  fold_wrong: 0
+  exec_wrong: 0
+  exec_trap: 0
+  fold_undef: 0
+## arith.addi i8 pairs=484 defined=484 unfolded=0  
+  fold_wrong: 0
+  exec_wrong: 0
+  exec_trap: 0
+  fold_undef: 0
+## arith.subi i8 pairs=484 defined=484 unfolded=0  
+  fold_wrong: 0
+  exec_wrong: 0
+  exec_trap: 0
+  fold_undef: 0
+## arith.muli i8 pairs=484 defined=484 unfolded=0  
+  fold_wrong: 0
+  exec_wrong: 0
+  exec_trap: 0
+  fold_undef: 0
+## arith.divsi i8 pairs=484 defined=461 unfolded=0  
+  fold_wrong: 0
+  exec_wrong: 0
+  exec_trap: 0
+  fold_undef: 1
+    (0, 0, 0)
+## arith.divui i8 pairs=484 defined=462 unfolded=0  
+  fold_wrong: 0
+  exec_wrong: 0
+  exec_trap: 0
+  fold_undef: 1
+    (0, 0, 0)
+## arith.remsi i8 pairs=484 defined=461 unfolded=0  
+  fold_wrong: 0
+  exec_wrong: 0
+  exec_trap: 0
+  fold_undef: 2
+    (-128, -1, 0)
+    (0, 0, 0)
+## arith.remui i8 pairs=484 defined=462 unfolded=0  
+  fold_wrong: 0
+  exec_wrong: 0
+  exec_trap: 0
+  fold_undef: 1
+    (0, 0, 0)
+## arith.ceildivsi i8 pairs=484 defined=461 unfolded=0  
+  fold_wrong: 0
+  exec_wrong: 0
+  exec_trap: 0
+  fold_undef: 1
+    (0, 0, 0)
+## arith.ceildivui i8 pairs=484 defined=462 unfolded=0  
+  fold_wrong: 0
+  exec_wrong: 0
+  exec_trap: 0
+  fold_undef: 1
+    (0, 0, 0)
+## arith.floordivsi i8 pairs=484 defined=461 unfolded=0  
+  fold_wrong: 0
+  exec_wrong: 0
+  exec_trap: 0
+  fold_undef: 1
+    (0, 0, 0)
+## arith.shli i8 pairs=484 defined=110 unfolded=0  
+  fold_wrong: 0
+  exec_wrong: 0
+  exec_trap: 0
+  fold_undef: 17
+    (0, -128, 0)
+    (0, -127, 0)
+    (0, -126, 0)
+    (0, -65, 0)
+    (0, -64, 0)
+    (0, -9, 0)
+    (0, -8, 0)
+    (0, -7, 0)
+    (0, -3, 0)
+    (0, -2, 0)
+    (0, -1, 0)
+    (0, 8, 0)
+## arith.shrsi i8 pairs=484 defined=110 unfolded=0  
+  fold_wrong: 0
+  exec_wrong: 0
+  exec_trap: 0
+  fold_undef: 50
+    (-128, -128, 0)
+    (-127, -127, 0)
+    (-126, -126, 0)
+    (-65, -65, 0)
+    (-64, -64, 0)
+    (-9, -9, 0)
+    (-8, -8, 0)
+    (-7, -7, 0)
+    (-3, -3, 0)
+    (-2, -2, 0)
+    (-1, -128, -1)
+    (-1, -127, -1)
+## arith.shrui i8 pairs=484 defined=110 unfolded=0  
+  fold_wrong: 0
+  exec_wrong: 0
+  exec_trap: 0
+  fold_undef: 34
+    (-128, -128, 0)
+    (-127, -127, 0)
+    (-126, -126, 0)
+    (-65, -65, 0)
+    (-64, -64, 0)
+    (-9, -9, 0)
+    (-8, -8, 0)
+    (-7, -7, 0)
+    (-3, -3, 0)
+    (-2, -2, 0)
+    (-1, -1, 0)
+    (0, -128, 0)
+## arith.maxsi i8 pairs=484 defined=484 unfolded=0  
+  fold_wrong: 0
+  exec_wrong: 0
+  exec_trap: 0
+  fold_undef: 0
+## arith.minsi i8 pairs=484 defined=484 unfolded=0  
+  fold_wrong: 0
+  exec_wrong: 0
+  exec_trap: 0
+  fold_undef: 0
+## arith.maxui i8 pairs=484 defined=484 unfolded=0  
+  fold_wrong: 0
+  exec_wrong: 0
+  exec_trap: 0
+  fold_undef: 0
+## arith.minui i8 pairs=484 defined=484 unfolded=0  
+  fold_wrong: 0
+  exec_wrong: 0
+  exec_trap: 0
+  fold_undef: 0
+## index.add index pairs=676 defined=676 unfolded=676  
+  fold_wrong: 0
+  exec_wrong: 0
+  exec_trap: 0
+  fold_undef: 0
+## index.sub index pairs=676 defined=676 unfolded=676  
+  fold_wrong: 0
+  exec_wrong: 0
+  exec_trap: 0
+  fold_undef: 0
+## index.mul index pairs=676 defined=676 unfolded=676  
+  fold_wrong: 0
+  exec_wrong: 0
+  exec_trap: 0
+  fold_undef: 0
+## index.divs index pairs=676 defined=649 unfolded=649  
+  fold_wrong: 0
+  exec_wrong: 0
+  exec_trap: 0
+  fold_undef: 0
+## index.divu index pairs=676 defined=650 unfolded=650  
+  fold_wrong: 0
+  exec_wrong: 0
+  exec_trap: 0
+  fold_undef: 0
+## index.rems index pairs=676 defined=649 unfolded=649  
+  fold_wrong: 0
+  exec_wrong: 0
+  exec_trap: 0
+  fold_undef: 0
+## index.remu index pairs=676 defined=650 unfolded=650  
+  fold_wrong: 0
+  exec_wrong: 0
+  exec_trap: 0
+  fold_undef: 0
+## index.ceildivs index pairs=676 defined=649 unfolded=649  traps=1
+  fold_wrong: 0
+  exec_wrong: 11
+    (-9223372036854775808, 2, 4611686018427387904, -4611686018427387904)
+    (-9223372036854775808, 3, 3074457345618258602, -3074457345618258602)
+    (-9223372036854775808, 63, 146402730743726600, -146402730743726600)
+    (-9223372036854775808, 64, 144115188075855872, -144115188075855872)
+    (-9223372036854775808, 65, 141898031336227320, -141898031336227320)
+    (-9223372036854775808, 2147483647, 4294967298, -4294967298)
+    (-9223372036854775808, 2147483648, 4294967296, -4294967296)
+    (-9223372036854775808, 4294967296, 2147483648, -2147483648)
+    (-9223372036854775808, 4611686018427387904, 2, -2)
+    (-9223372036854775808, 9223372036854775806, 1, -1)
+    (-9223372036854775808, 9223372036854775807, 1, -1)
+  exec_trap: 1
+    (9223372036854775807, -1)
+  fold_undef: 0
+## index.ceildivu index pairs=676 defined=650 unfolded=650  
+  fold_wrong: 0
+  exec_wrong: 0
+  exec_trap: 0
+  fold_undef: 0
+## index.floordivs index pairs=676 defined=649 unfolded=649  traps=1
+  fold_wrong: 0
+  exec_wrong: 0
+  exec_trap: 1
+    (-9223372036854775807, -1)
+  fold_undef: 0
+## index.shl index pairs=676 defined=130 unfolded=130  
+  fold_wrong: 0
+  exec_wrong: 0
+  exec_trap: 0
+  fold_undef: 0
+## index.shrs index pairs=676 defined=130 unfolded=130  
+  fold_wrong: 0
+  exec_wrong: 0
+  exec_trap: 0
+  fold_undef: 0
+## index.shru index pairs=676 defined=130 unfolded=130  
+  fold_wrong: 0
+  exec_wrong: 0
+  exec_trap: 0
+  fold_undef: 0
+## index.maxs index pairs=676 defined=676 unfolded=676  
+  fold_wrong: 0
+  exec_wrong: 0
+  exec_trap: 0
+  fold_undef: 0
+## index.mins index pairs=676 defined=676 unfolded=676  
+  fold_wrong: 0
+  exec_wrong: 0
+  exec_trap: 0
+  fold_undef: 0
+## index.maxu index pairs=676 defined=676 unfolded=676  
+  fold_wrong: 0
+  exec_wrong: 0
+  exec_trap: 0
+  fold_undef: 0
+## index.minu index pairs=676 defined=676 unfolded=676  
+  fold_wrong: 0
+  exec_wrong: 0
+  exec_trap: 0
+  fold_undef: 0

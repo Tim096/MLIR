@@ -9,12 +9,13 @@
 >
 > 新 session 開場建議直接說：「讀 Goal.md 和 TODO.md，然後接續」。
 
-最後更新：2026-11-16
+最後更新：2026-11-17
 
 ---
 
 ## 一句話現況
 
+**11-17：#221298、#221185 得到 FedericoBruzzone approve（都在等 banach-space）；#221385 回了三點。下一個大題改成「非 poison 分析」，已在 Discourse `ub.assume` 討論串第 9 則提問，等回覆。詳見下方 11-17 段落。**
 **11-16：十二個 commit 已進 upstream（11-09 #221307）。十一個 open PR，十個已 merge main 並 ping，#221268 讓給 dhairyashilRG 的 SuperVectorize switch。詳見下方 11-16 段落。**
 **11-01：十一個 commit 已進 upstream（10-08 #221384、10-16 #221293）。五個 PR 的 review 都回了（fixup 已 push、回覆已貼），另開 issue #237728。實際內容見 [`patches/2026-11-01-replies.md`](patches/2026-11-01-replies.md)。下表狀態為 10-08 實查，最新見下方 11-01 段落。**
 **九個 commit 已進 upstream。十四個 open PR（10-08：關 5 個轉傳屬性 PR、新開 #230085、#230086）。三個在等 merge：#215696（kuhar，10-08 rebase＋請 land）、#221384（matteo-rm，10-08 請 land）。**
@@ -55,6 +56,34 @@
 | [#221386](https://github.com/llvm/llvm-project/pull/221386) | M1-f：`ArithToAMDGPU` 對 scale 型別零檢查，硬體只讀 exponent；改成只認 `f8E8M0FNU`（其餘留給 `arith-expand`），並把 `arith.truncf ... toward_zero : f32 to f8E8M0FNU` 折進指令。#215295 krzysz00 的建議、#217892 的 AMDGPU 側 | 🆕 **2026-09-05 送出**，head `3cc500a59ae0`，3 個檔案 +134/−30。留言（5549169899）點名 krzysz00、tgymnich、Muzammiluddin-Syed-ECE、kuhar，並問要不要改成 pass 內自己展開 | 跑中 |
 | [#230085](https://github.com/llvm/llvm-project/pull/230085) | 🆕 fastmath 旗標的 self-contained 定義（`ArithBase.td` +32），取代 #217087（ivanradanov 10-07 要我自己送） | 🆕 **2026-10-08 送出**，head `a2589de0a682`。比 09-15 草稿多改三處：補 `afn` 為 rewrite-based、`nsz` 只講 operand、拿掉「follows IEEE 754」 | 跑中 |
 | [#230086](https://github.com/llvm/llvm-project/pull/230086) | 🆕 APFloat：無號格式（E8M0FNU／E5M3FNU）的負值變 NaN＋`opInvalidOp`，負零／負 NaN 只丟 sign；修 `-Inf`／`-NaN` convert assert、`1.0 - 1.5` 得 `-0.5`。#223286 的 follow-up | 🆕 **2026-10-08 送出**，head `24127a2345d7`，留言 @tgymnich（說明為何不照 09-14 說的清 sign，改照 #216387）。推翻 #107127／#210720 兩個 subtract death test | 跑中 |
+
+### 📌 2026-11-17：兩個 approve、找下一個大題（兩題否決、一題改向）
+
+**11-16 ping 之後的回應（全是 FedericoBruzzone）**：
+- **#221298**：11-16 APPROVED，「wait for @banach-space before landing」。
+- **#221185**：11-16 APPROVED % nit（既有 i4 範例註解還是舊的 deinterleave 逗號語法）。改成 `->`，head `1778e30a69f8`，已回。同樣要等 banach-space。
+- **#221385**：兩則 inline＋PR 描述。①`llvm::AbsoluteValue` 只對負 stride 有用——是，但 memref 型別允許負 stride（`strided<[-1]>` 實測能 parse），helper 已在 `MemRefUtils`，保留；②`offsets` 大小加一行註解，head `06b4bdd466cd`；③描述 11-01 起就是 `memref::`，舊名只在第一個 commit message。Vector＋MemRef lit 136 個過。
+- 其餘七個（#215696、#230085、#230086、#217892、#221288、#221308、#221386）無回應，CI 全綠。dhairyashilRG 的 SuperVectorize PR 還沒送。
+
+**找下一個大題（本人要求：大、碰核心、有價值、不亂找）。三個假設都先量再決定：**
+
+1. **`ub.poison` 讓 folder 崩潰 → 否決。** `tools/poison-fold-probe/probe.py`：245 個 `-canonicalize` 測試檔的常數逐一換成 `ub.poison`，2775 個變異、38 次崩潰、7 個崩潰點（`shape` 五個、`affine.delinearize_index`、`foldAttributesIntoMap`），全部已在 #226067 被認領或有 PR。
+2. **`arith`／`index` 折疊與 lowering 不一致 → 否決。** `tools/int-semantics-probe/probe.py`：17 個 op，i4 窮舉＋i8／index 邊界值，比文件語意、folder、`mlir-runner` 實際執行。`arith` 零差異。`index.ceildivs` 11 筆錯（INT_MIN／正數得正值，就是 #215696 在修的）；trap 兩筆：`index.floordivs (INT_MIN+1, -1)`（已知 #235168）、`index.ceildivs (INT_MAX, -1)`（**沒查是否已回報、#215696 是否涵蓋**）。`index` 的 folder 沒量到（輸出解析沒對上）。
+3. **LICM 用範圍分析判斷除法可否搬出迴圈 → 照原樣做是錯的，改向。**
+   - 缺口是真的：`playground/licm-range/div-not-hoisted.mlir`，除數 `maxsi(%n, 1)`，`-int-range-optimizations` 回報 `smin = 1`，LICM 不搬；換成常數 7 會搬。既有 matcher（`Matchers.h` 的 `infer_int_range_op_binder`，#102494）只看定義除數的那一個 op，且把它的運算元全設成 max range。`IntegerRangeAnalysis` 全樹只有 `IntRangeOptimizations`、`UnsignedWhenEquivalent` 在用。
+   - **但範圍可能只在「不是 poison」時成立**：`playground/licm-range/unsound-with-nuw.mlir`，`%d = addi %n, 1 overflow<nuw>` 範圍 `umin = 1`，`%n = UINT_MAX` 時是 poison；迴圈跑 0 次時搬出去就多了除以 poison 的 UB。`maxsi(%n, 1)` 在 `%n` 是 poison 時同理。樹裡沒有 freeze、沒有「保證非 poison」的工具，`mlir/docs` 沒寫引數能否為 poison。
+   - 已發佈的圖解（<https://claude.ai/artifact/YRPBEbdCymHPJw6ZxgRfTx>）把這題說成「接兩個元件」，**那個說法是錯的**，缺的是第三塊。
+   - #242700（matthias-springer，`ub.assume`）：讀 diff（`b6df45090607`，沒 build），範圍在 `IntegerRangeAnalysis::visitOperation` 內特判，op 沒實作 `InferIntRangeInterface`，所以既有 matcher 看不到，他的 PR 本身沒有這個洞。
+
+**本人決定走 B→A**：B＝在 Discourse 指出這個限制並提問；A＝做「保證非 poison」的分析，再疊原提案。
+- B 已由本人貼出：`ub.assume` 討論串第 9 則（11-16 17:19 UTC），<https://discourse.llvm.org/t/a-new-ub-assume-operation/92834>。文稿與查證 `patches/2026-11-16-discourse-range-speculation.md`。問兩件事：函式／block 引數能否為 poison、從記憶體讀出的值能否為 poison。文末「I'd like to work on this」。
+- A 還沒動。兩個問題沒答案前，保守假設下幾乎證明不了任何東西。
+
+**相關 Discourse 討論串（11-16 讀過）**：「UB Op Semantics of arith Integer Division / Remainder」（92558，matthias-springer；#233161、#237021 open，#235770 已進）、「Tree-wide audit of Pure / AlwaysSpeculatable ops」（92649，M05t4f4）、「Fast-math flags on Linalg and Vector ops」（92764，設計未定，開發暫停）。#227821 沒人認領的列：`VectorToXeGPU`、`SwapExtractSliceOfTransferWrite`、最後的移除。
+
+**環境**：Discourse 沒有憑證，只能本人貼；GitHub 用 `gh`（Tim096）。本機 `~/llvm-project` 在 main `376f04dd8bdb`，多一個只讀用的 `review/pr-242700`；`wip/stack-1116` 是 11-16 的驗證分支。
+
+**下一步**：①看 Discourse 第 9 則有沒有人回 → 決定 A ②#221298、#221185 等 banach-space ③#221385 等 Federico ④dhairyashilRG 的 PR 進了就關 #221268 ⑤`index.ceildivs (INT_MAX, -1)` 的 trap 要查。
 
 ### 📌 2026-11-16：一個 merge、#221268 讓出、十個 PR merge main 後 ping
 
