@@ -9,12 +9,13 @@
 >
 > 新 session 開場建議直接說：「讀 Goal.md 和 TODO.md，然後接續」。
 
-最後更新：2026-11-17
+最後更新：2026-11-21
 
 ---
 
 ## 一句話現況
 
+**11-21：十二個 commit、十個 open PR。#221298 有兩個 approve（Federico、banach-space），nit 已改並請 land；#221185 回了 banach-space 四則 inline；#221268 已關（#243425 進了）。Discourse 給 matthias-springer 的回覆草稿在 `patches/2026-11-21-discourse-reply-matthias.md`，等本人貼。詳見下方 11-21 段落。**
 **11-17：#221298、#221185 得到 FedericoBruzzone approve（都在等 banach-space）；#221385 回了三點。下一個大題改成「非 poison 分析」，已在 Discourse `ub.assume` 討論串第 9 則提問，等回覆。詳見下方 11-17 段落。**
 **11-16：十二個 commit 已進 upstream（11-09 #221307）。十一個 open PR，十個已 merge main 並 ping，#221268 讓給 dhairyashilRG 的 SuperVectorize switch。詳見下方 11-16 段落。**
 **11-01：十一個 commit 已進 upstream（10-08 #221384、10-16 #221293）。五個 PR 的 review 都回了（fixup 已 push、回覆已貼），另開 issue #237728。實際內容見 [`patches/2026-11-01-replies.md`](patches/2026-11-01-replies.md)。下表狀態為 10-08 實查，最新見下方 11-01 段落。**
@@ -56,6 +57,26 @@
 | [#221386](https://github.com/llvm/llvm-project/pull/221386) | M1-f：`ArithToAMDGPU` 對 scale 型別零檢查，硬體只讀 exponent；改成只認 `f8E8M0FNU`（其餘留給 `arith-expand`），並把 `arith.truncf ... toward_zero : f32 to f8E8M0FNU` 折進指令。#215295 krzysz00 的建議、#217892 的 AMDGPU 側 | 🆕 **2026-09-05 送出**，head `3cc500a59ae0`，3 個檔案 +134/−30。留言（5549169899）點名 krzysz00、tgymnich、Muzammiluddin-Syed-ECE、kuhar，並問要不要改成 pass 內自己展開 | 跑中 |
 | [#230085](https://github.com/llvm/llvm-project/pull/230085) | 🆕 fastmath 旗標的 self-contained 定義（`ArithBase.td` +32），取代 #217087（ivanradanov 10-07 要我自己送） | 🆕 **2026-10-08 送出**，head `a2589de0a682`。比 09-15 草稿多改三處：補 `afn` 為 rewrite-based、`nsz` 只講 operand、拿掉「follows IEEE 754」 | 跑中 |
 | [#230086](https://github.com/llvm/llvm-project/pull/230086) | 🆕 APFloat：無號格式（E8M0FNU／E5M3FNU）的負值變 NaN＋`opInvalidOp`，負零／負 NaN 只丟 sign；修 `-Inf`／`-NaN` convert assert、`1.0 - 1.5` 得 `-0.5`。#223286 的 follow-up | 🆕 **2026-10-08 送出**，head `24127a2345d7`，留言 @tgymnich（說明為何不照 09-14 說的清 sign，改照 #216387）。推翻 #107127／#210720 兩個 subtract death test | 跑中 |
+
+### 📌 2026-11-21：#221298 第二個 approve、#221185 四則 review、關 #221268、Discourse 有人回
+
+**11-17 → 11-21 實查**（其餘七個 PR、#221385、issue #223478／#237728 都沒有新回應）：
+
+- **#221298**：banach-space 11-18 APPROVED（"LG % nit"）：負向測試留一個就夠。刪掉 `extsi` 那個、留 `extf`，head `b04c8d404c47`，描述的 Tests 行同步改，回 inline，留言（issuecomment-7064339064）請 banach-space／FedericoBruzzone land。
+- **#221185**：banach-space 11-18 四則 inline，head `8e3c09d49d69`，四則都回了。
+  - lit 測試：來源縮成 `vector<4xi8>`／`vector<4xi32>`／`vector<2x4xi8>`，`CHECK-NOT` 全拿掉改成檢查整串，每個測試檢查回傳值；unaligned 改成 `vector<2xi8>` 並加「Negative test」註解。
+  - 文件範例：i4、i2 兩個範例原本都漏了先 `trunci` 到 `i8` 那一行，補上；i2 範例縮成 4 個元素。
+  - helper 註解照他的 suggestion，變數 `vec02`／`vec13` 改名 `evenEvenOdd`／`oddEvenOdd`。
+  - integration 測試他問 `0x01` 為什麼印 `1, 0`：`i1` bitcast 是最低位先印，只回覆、沒改檔。
+  - 驗證：`mlir/test/Dialect/Vector`、`Conversion/VectorToLLVM`、integration `rewrite-narrow-types.mlir` 共 113 個過。
+- **#221268**：dhairyashilRG 的 #243425 在 11-21 14:17 UTC merge（`0c41652846ac`）。留言（issuecomment-7064382855）後關閉。**沒有在新 main 上重跑本 PR 的重現檔。**
+
+**Discourse `ub.assume` 討論串（共 18 則）**：
+- 第 12 則（matthias-springer，11-18）：問題 1 答「會」（`scf.for` 的 iter_arg、函式引數都可能是 poison）；問題 2 沒答。反問「推得出非全範圍的 range 不就等於不是 poison？」。提議在除法 op 加「不會除以零」之類的屬性，另開 pass 跑範圍分析去推（也推 `nsw` 等）。
+- 第 18 則（同人，11-20）：把 `arith.divui` 的例子當成支持立即 UB 的論據，提議 `ub.assume`（poison）＋`ub.assert`（立即 UB）兩個 op。
+- 回覆草稿：[`patches/2026-11-21-discourse-reply-matthias.md`](patches/2026-11-21-discourse-reply-matthias.md)。三點：`addi nuw` 的 range 是「在範圍內或 poison」；屬性＋推導 pass 可以，pass 需要 range 與 not-poison 兩個事實，後者在 lattice 加一個 bit；引數可為 poison 時需要能清掉那個 bit 的根，`ub.assert` 就是。**未貼，等本人。**
+
+**下一步**：①本人貼 Discourse 回覆 ②#221298 等 land ③#221185 等 banach-space 再看 ④#221385 等 Federico ⑤七個無回應的 PR 12-07 前後再 ping（11-16 起算三週）⑥`index.ceildivs (INT_MAX, -1)` 的 trap 還沒查。
 
 ### 📌 2026-11-17：兩個 approve、找下一個大題（兩題否決、一題改向）
 
