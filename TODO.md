@@ -9,13 +9,14 @@
 >
 > 新 session 開場建議直接說：「讀 Goal.md 和 TODO.md，然後接續」。
 
-最後更新：2026-11-21
+最後更新：2026-11-24
 
 ---
 
 ## 一句話現況
 
-**11-21：十二個 commit、十個 open PR。#221298 有兩個 approve（Federico、banach-space），nit 已改並請 land；#221185 回了 banach-space 四則 inline；#221268 已關（#243425 進了）。Discourse 給 matthias-springer 的回覆草稿在 `patches/2026-11-21-discourse-reply-matthias.md`，等本人貼。詳見下方 11-21 段落。**
+**11-24：十三個 commit（#221298 11-21 進）、九個 open PR，全部 mergeable、CI 綠，11-21 之後沒有新 review。Discourse 回覆已通過審核（第 19 則），還沒有人直接回。詳見下方 11-24 段落。**
+**11-21：十二個 commit、十個 open PR。#221298 有兩個 approve（Federico、banach-space），nit 已改並請 land；#221185 回了 banach-space 四則 inline；#221268 已關（#243425 進了）。Discourse 給 matthias-springer 的回覆本人 11-21 已貼（`patches/2026-11-21-discourse-reply-matthias.md`），等版主審核。詳見下方 11-21 段落。**
 **11-17：#221298、#221185 得到 FedericoBruzzone approve（都在等 banach-space）；#221385 回了三點。下一個大題改成「非 poison 分析」，已在 Discourse `ub.assume` 討論串第 9 則提問，等回覆。詳見下方 11-17 段落。**
 **11-16：十二個 commit 已進 upstream（11-09 #221307）。十一個 open PR，十個已 merge main 並 ping，#221268 讓給 dhairyashilRG 的 SuperVectorize switch。詳見下方 11-16 段落。**
 **11-01：十一個 commit 已進 upstream（10-08 #221384、10-16 #221293）。五個 PR 的 review 都回了（fixup 已 push、回覆已貼），另開 issue #237728。實際內容見 [`patches/2026-11-01-replies.md`](patches/2026-11-01-replies.md)。下表狀態為 10-08 實查，最新見下方 11-01 段落。**
@@ -58,6 +59,32 @@
 | [#230085](https://github.com/llvm/llvm-project/pull/230085) | 🆕 fastmath 旗標的 self-contained 定義（`ArithBase.td` +32），取代 #217087（ivanradanov 10-07 要我自己送） | 🆕 **2026-10-08 送出**，head `a2589de0a682`。比 09-15 草稿多改三處：補 `afn` 為 rewrite-based、`nsz` 只講 operand、拿掉「follows IEEE 754」 | 跑中 |
 | [#230086](https://github.com/llvm/llvm-project/pull/230086) | 🆕 APFloat：無號格式（E8M0FNU／E5M3FNU）的負值變 NaN＋`opInvalidOp`，負零／負 NaN 只丟 sign；修 `-Inf`／`-NaN` convert assert、`1.0 - 1.5` 得 `-0.5`。#223286 的 follow-up | 🆕 **2026-10-08 送出**，head `24127a2345d7`，留言 @tgymnich（說明為何不照 09-14 說的清 sign，改照 #216387）。推翻 #107127／#210720 兩個 subtract death test | 跑中 |
 
+### 📌 2026-11-24：#221298 merge、Discourse 回覆通過審核
+
+**11-21 → 11-24 實查**（`gh pr view` 逐一＋Discourse `.json`）：
+
+- **#221298**：FedericoBruzzone 11-21 16:09 UTC 代 merge，squash commit `8ec88b1ab7f9`。**第十三個 commit。**
+- **#221185**：11-21 的四則回覆之後 banach-space 沒有再回。
+- **其餘八個 open PR**（#215696、#217892、#221288、#221308、#221385、#221386、#230085、#230086）：無新 review、無新留言，全部 mergeable、CI 綠。
+- **issue #223478、#237728**：無新留言。
+- **Discourse `ub.assume` 討論串（共 23 則）**：
+  - 第 19 則＝本人的回覆，11-21 19:42 UTC 通過審核，已公開。
+  - 第 20 則（Hardcode84，11-21）：downstream 做過很像的 op，+1「回傳 value」的設計。
+  - 第 22 則（Hardcode84）：`memref.assume_alignment` 可以用 dataflow 把 alignment 傳到 `memref.load`／`store`，在它們前面插 `llvm.assume`。
+  - 第 23 則（krzysz00，11-22）：假期過後再讀。
+  - matthias-springer 還沒回第 19 則；問題 2（記憶體讀出的值能否為 poison）仍沒人答。
+
+**Commit access 申請**：11-24 開 issue [#245596](https://github.com/llvm/llvm-project/issues/245596)（文稿 `patches/2026-11-24-commit-access-request.md`）。條件（`llvm/docs/DeveloperPolicy.md`）：3 個 merged PR 以上（有 13 個）＋兩位現任 contributor 在 issue 表態支持。拿到後收 GitHub 邀請（沒通知就開 <https://github.com/orgs/llvm/invitation>）。
+
+**`index.ceildivs (INT_MAX, -1)` 的 trap（11-24 查完）**：
+- 原因：main 的 `ConvertIndexCeilDivS` 兩個分支都先算再 `select`。`m = -1` 時 `x = 1`，`n + x` = `INT_MAX + 1` 繞回 `INT_MIN`，沒被選到的那個分支做 `INT_MIN sdiv -1`。
+- main（本機 build，`376f04dd8bdb`）實跑：`mlir-runner` SIGFPE，rc=136。正確值是 `-INT_MAX`；`-canonicalize` 的 folder 折出 `-9223372036854775807`，是對的。
+- #215696 的 lowering 只有一個 `sdiv n, m`。把那個公式手寫成 LLVM dialect 用 `mlir-runner` 跑：回傳 `-9223372036854775807`，rc=0。**沒有用 #215696 分支實際 build 跑過。**
+- 沒有人單獨回報這組輸入。
+- **新發現的重疊**：issue #243614（lin334141-cell，11-17，`ceildivs(INT64_MIN, 3)` 得正值）＋ PR #243705（woruyu，11-18，+50/−66，改 `IndexToLLVM.cpp`、`IndexOps.cpp` 兩個檔，零 review）。跟 #215696 是同一個 bug、同一個 lowering 寫法；#215696 範圍較大（另含 SPIR-V lowering、affine 展開、range inference）且 kuhar 08-14 已 approve。11-24 兩處都留言指向 #215696（issuecomment-7131931536、7131931933，後者 cc kuhar 決定順序）；文稿 `patches/2026-11-24-ceildivs-overlap-comments.md`。
+
+**下一步**：⓪看 #245596 有沒有兩個 LGTM ①等 matthias-springer／krzysz00 回第 19 則 → 決定 A（非 poison 分析）怎麼開 ②#221185 等 banach-space ③#221385 等 Federico ④八個無回應的 PR 12-07 前後再 ping ⑤看 kuhar／woruyu 對 #215696 與 #243705 順序的回應。
+
 ### 📌 2026-11-21：#221298 第二個 approve、#221185 四則 review、關 #221268、Discourse 有人回
 
 **11-17 → 11-21 實查**（其餘七個 PR、#221385、issue #223478／#237728 都沒有新回應）：
@@ -74,9 +101,9 @@
 **Discourse `ub.assume` 討論串（共 18 則）**：
 - 第 12 則（matthias-springer，11-18）：問題 1 答「會」（`scf.for` 的 iter_arg、函式引數都可能是 poison）；問題 2 沒答。反問「推得出非全範圍的 range 不就等於不是 poison？」。提議在除法 op 加「不會除以零」之類的屬性，另開 pass 跑範圍分析去推（也推 `nsw` 等）。
 - 第 18 則（同人，11-20）：把 `arith.divui` 的例子當成支持立即 UB 的論據，提議 `ub.assume`（poison）＋`ub.assert`（立即 UB）兩個 op。
-- 回覆草稿：[`patches/2026-11-21-discourse-reply-matthias.md`](patches/2026-11-21-discourse-reply-matthias.md)。三點：`addi nuw` 的 range 是「在範圍內或 poison」；屬性＋推導 pass 可以，pass 需要 range 與 not-poison 兩個事實，後者在 lattice 加一個 bit；引數可為 poison 時需要能清掉那個 bit 的根，`ub.assert` 就是。**未貼，等本人。**
+- 回覆草稿：[`patches/2026-11-21-discourse-reply-matthias.md`](patches/2026-11-21-discourse-reply-matthias.md)。三點：`addi nuw` 的 range 是「在範圍內或 poison」；屬性＋推導 pass 可以，pass 需要 range 與 not-poison 兩個事實，後者在 lattice 加一個 bit；引數可為 poison 時需要能清掉那個 bit 的根，`ub.assert` 就是。**本人 11-21 已貼，顯示 AWAITING APPROVAL。**
 
-**下一步**：①本人貼 Discourse 回覆 ②#221298 等 land ③#221185 等 banach-space 再看 ④#221385 等 Federico ⑤七個無回應的 PR 12-07 前後再 ping（11-16 起算三週）⑥`index.ceildivs (INT_MAX, -1)` 的 trap 還沒查。
+**下一步**：①看 Discourse 回覆有沒有通過審核、有沒有人回 ②#221298 等 land ③#221185 等 banach-space 再看 ④#221385 等 Federico ⑤七個無回應的 PR 12-07 前後再 ping（11-16 起算三週）⑥`index.ceildivs (INT_MAX, -1)` 的 trap 還沒查。
 
 ### 📌 2026-11-17：兩個 approve、找下一個大題（兩題否決、一題改向）
 
