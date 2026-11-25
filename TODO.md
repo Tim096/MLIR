@@ -76,6 +76,40 @@
 
 **Commit access 申請**：11-24 開 issue [#245596](https://github.com/llvm/llvm-project/issues/245596)（文稿 `patches/2026-11-24-commit-access-request.md`）。條件（`llvm/docs/DeveloperPolicy.md`）：3 個 merged PR 以上（有 13 個）＋兩位現任 contributor 在 issue 表態支持。拿到後收 GitHub 邀請（沒通知就開 <https://github.com/orgs/llvm/invitation>）。
 
+**11-25 實查**：
+- **#245596**：兩個 LGTM 到齊——banach-space（11-24 16:34 UTC）、FedericoBruzzone（17:07 UTC）。Federico 附一個建議：把貢獻集中在 MLIR 的一個子集，reviewer 比較好排優先序。issue 仍 open，`permissions.push` 還是 `false`，邀請還沒發。
+- **Federico 的建議怎麼用**（留言 <https://github.com/llvm/llvm-project/issues/245596#issuecomment-7138714049>）：28 個 PR 分在約 11 個區塊（arith、index／affine、vector、VectorToSCF、vector-to-gpu、gpu、AMDGPU、memref、linalg、complex、APFloat），九個 open PR 分在六塊。之後新題目只在主攻區塊開，不再開新區塊；既有 open PR 不撤。**主攻區塊（本人 11-25 決定）：`arith`＋範圍／poison 分析**（含 `IntegerRangeAnalysis`、`InferIntRangeInterface`、`ub` dialect）。`vector` 等其他區塊：既有 PR 與 review 回覆照做，不開新題。
+- **#221185**：banach-space 11-24 16:04 UTC APPROVED（"Thanks, LGTM!"），加上 Federico 11-16 的 approve 共兩個。CI 綠。**本人決定：不請人 land，等 commit access 下來自己 merge，當第一次。** 到時用「Squash and merge」，merge 前確認 commit 標題／描述與 PR 一致、作者 email 是 `tseng.tim096@gmail.com`、CI 綠、與 main 無衝突。
+- #243614、#243705、其餘 PR、Discourse（仍 23 則）：無新回應。
+
+**選題（本人 11-25 決定）**：主線 A＝poison 四題一串（①「可能是 poison」分析 → ②`ub.freeze` → ③自動標「不會除以零」的 pass → ④範圍分析幫 LICM 搬除法）；旁線 B＝範圍分析小修（都在 krzysz00 的檔案）；另外開始 review 別人的 arith／範圍分析 PR。
+- A-① 要跟 Hardcode84 的 #152932（poison＝empty range，2026-03 後沒動）協調；等 matthias-springer 回 Discourse 第 19 則。
+- 量到的現況（origin/main `1f484d33a1e7`）：`ub` 只有 `poison`／`unreachable`；`IntegerRangeAnalysis` 只有 `IntRangeOptimizations`、`UnsignedWhenEquivalent`、`StridedMetadataRangeAnalysis` 在用；樹裡沒有 KnownBits、沒有浮點範圍分析；SMT dialect 在樹裡但沒有 arith→SMT；範圍分析 CODEOWNER 只有 krzysz00。
+- 不碰（有人在做）：窄浮點（yifeihe07 #245138／#245151／#245499／#236002，**可能與 #217892、#221386 衝突，沒比對**）、signed zero 折疊、Pure／Speculatable 全樹 audit（M05t4f4）。#203855 是 test op 且已有 #218489，不做。
+- **社群氣氛（事實）**：Discourse 92663 第 32～36 則（11-16），Federico 說大量 AI PR「unmanageable」，rengolin 提議直接 ban。#241712 的前一個修正 #242881（DiadkoShmek，標 `Assisted-by: OpenAI Codex`）開一天就關，Federico 在 review 貼了那兩則連結。`llvm/docs/AIToolPolicy.md`：含大量工具產生內容的貢獻要標示；`good first issue` 禁用 AI（#241712 只有 `mlir` 標籤）。
+
+**B-1：#241712（A 部分）`scf.for unsigned` 的 IV 範圍被當成有號**（11-25 本機做，未送）：
+- 重現（本機 `376f04dd8bdb`）：`dyn_bound` 72→0、`const_bounds` 19900→199，與 issue 相同。
+- 分支 `intrange-unsigned-loop-bounds`（基於本機 main，還沒 rebase 到 origin/main）：`LoopLikeOpInterface` 加 `hasUnsignedBounds()`（預設 false），`scf.for`／`scf.parallel` 回傳 `getUnsignedCmp()`；`IntegerRangeAnalysis` 對 unsigned 迴圈用 `umin(lb)`／`umax(ub) - 1` 和 `fromUnsigned`。4 個檔 +48/−10，另加三個測試在 `int-range-interface.mlir`。
+- issue 的 B 部分（`scf::matchForLikeLoop`，SCF 區塊）不做。
+- 11-25 重建後驗證：`int-range-interface.mlir` 三個新測試過；issue 的兩個例子回到 72、19900；`mlir/test/Dialect/{Arith,SCF,Affine}`＋`Analysis/DataFlow` 163 個全過；clang-format 無改動。本機 commit `31ad4548426c`。
+- **09-14 的承諾（審中的 PR 進或關之前不開新 PR）還在，目前九個 open。何時送由本人決定。**
+
+**Review 別人的 PR（本人 11-25 決定開始做；一天最多一到兩則，每則本機實跑，本人看懂再貼）**：
+- 做法（本人 11-25）：能一起跑的一起跑，一次交一批草稿；順帶發現的同類問題寫成給作者的建議，不自己另開 issue。
+- 這一批五則草稿。**11-25 已貼兩則**：#237342（pullrequestreview-6057467773）、#245655（pullrequestreview-6057468062）。**其餘三則（#233860、#245951、#233536）未貼**，本人說明後天再貼；貼之前先看 PR 有沒有新 commit／別人的 review。
+
+  | PR | 作者 | 結論 | 草稿 |
+  |---|---|---|---|
+  | #237342 | edisongz | 規則正確（i8 窮舉零反例）；缺一個溢位路徑的測試；建議作者一併修 `addi`／`subi`（同樣的毛病，`mlir-opt` 回報 `udiv = 3`、實跑餘 2 與 1；建議的修法 i8 窮舉零反例） | `patches/2026-11-25-review-237342.md` |
+  | #233860 | dashygo097 | 159 組會折的型別組合全部窮舉通過；兩個 nit（`NOTE: TO BE WRITTEN`、無關的空行） | `patches/2026-11-25-review-batch.md` |
+  | #245655 | matteo-rm | 16 個 predicate × 9 組輸入全部互補，LGTM | 同上 |
+  | #245951 | yuanyiboyyb | 98 個結果與 `llvm.maximum`／`minimum` 逐 bit 相同；unranked tensor 退步（原本可展開，現在 pass 報錯） | 同上 |
+  | #233536 | kodlan | 490 組可比的全部一致，679 組比不了；`f8E8M0FNU` 當中間型別時條件誤判為精確 | 同上 |
+
+- 本機分支：`review/pr-237342`、`review/batch-1125`（後者疊在 `intrange-unsigned-loop-bounds` 上，四個 PR 一次 build）。`patches/2026-11-25-issue-addi-subi-divisibility.md` 留作查證紀錄，不送。
+- 還沒審的候選：#242700（draft）、#241853（ValueBounds，+713，不在主攻區塊正中）。
+
 **`index.ceildivs (INT_MAX, -1)` 的 trap（11-24 查完）**：
 - 原因：main 的 `ConvertIndexCeilDivS` 兩個分支都先算再 `select`。`m = -1` 時 `x = 1`，`n + x` = `INT_MAX + 1` 繞回 `INT_MIN`，沒被選到的那個分支做 `INT_MIN sdiv -1`。
 - main（本機 build，`376f04dd8bdb`）實跑：`mlir-runner` SIGFPE，rc=136。正確值是 `-INT_MAX`；`-canonicalize` 的 folder 折出 `-9223372036854775807`，是對的。
