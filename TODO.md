@@ -98,6 +98,14 @@
 **Review 別人的 PR（本人 11-25 決定開始做；一天最多一到兩則，每則本機實跑，本人看懂再貼）**：
 - 做法（本人 11-25）：能一起跑的一起跑，一次交一批草稿；順帶發現的同類問題寫成給作者的建議，不自己另開 issue。
 - 這一批五則草稿，**全部已貼**。11-25：#237342（pullrequestreview-6057467773）、#245655（pullrequestreview-6057468062）。11-26：#233860（pullrequestreview-6066758948）、#245951（pullrequestreview-6066759201）、#233536（pullrequestreview-6066759413）；貼之前查過三個 PR，head 與驗證時相同，沒有新 commit／review。
+- **11-26 作者回覆**（20:10 台灣時間查）：
+  - #237342（edisongz）：加了 `@muli_divisor_overflow` 測試（新 head `e67542df70`）；`addi`／`subi` 另開 follow-up PR。**把 Tim096 加進 requested reviewers**。新 head 還沒在本機重驗。
+  - #233860（dashygo097）：拿掉 `NOTE: TO BE WRITTEN`、還原空行（新 head `e898003481`）；#233536 先進的話會改用它的 helper，並保留 zero／signed 兩個檢查。
+  - #245951（yuanyiboyyb）：改了 unranked tensor（`shape.shape_of`＋`shape.num_elements`＋`tensor.splat`＋`tensor.reshape`），PR 由 +236 變 +493，新 head `bf2b3bf6dc`；`ExpandOps` 多依賴 Math／Shape dialect。**問了一個問題**：要不要為了省掉 splat 的暫存 buffer 另外加 `math.signbit`，還是這個 PR 維持 copysign。未回、新版未重驗。
+  - #245655、#233536：沒有回應。
+- **11-26 重驗三個新版**（本機分支 `review/batch-1126`，67 個 lit 全過）：#237342、#233860 實作沒變；#245951 新版 98 個結果仍相同、unranked 可展開。回覆在 `patches/2026-11-26-review-followups.md`，**三則已貼**（都是 COMMENT；沒有 repository access 時 APPROVE 會被 API 拒絕，422）。
+- **順帶發現（還沒查是不是已知、也沒在 origin/main 上重現）**：`arith.uitofp %t : tensor<*xi1> to tensor<*xf32>` 讓 verifier assert（`cast<RankedTensorType>`，在 `UIToFPOp::verifyInvariantsImpl`）。在主攻區塊（arith）內，可當自己的題目；開之前先搜 issue、在新的 main 上重現、看其他 cast op 有沒有一樣的問題。
+- commit access（#245596）：仍是兩個 LGTM，邀請未發，`permissions.push=false`。
 
   | PR | 作者 | 結論 | 草稿 |
   |---|---|---|---|
