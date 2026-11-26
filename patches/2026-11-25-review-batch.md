@@ -1,6 +1,7 @@
 # Review 草稿一批：#233860、#245655、#245951、#233536
 
-狀態：#245655 於 2026-11-25 已貼（pullrequestreview-6057468062）；#233860、#245951、#233536 未貼。
+狀態：四則都已貼。#245655 於 2026-11-25（pullrequestreview-6057468062）；#233860（pullrequestreview-6066758948）、#245951（pullrequestreview-6066759201）、#233536（pullrequestreview-6066759413）於 2026-11-26。
+貼之前（11-26）查過三個 PR：head 與 11-25 驗的相同，沒有新 commit、新 review 或新留言。
 
 本機分支 `review/batch-1125`（`376f04dd8bdb`＋自己的 `31ad4548426c`＋四個 PR 的 diff，一次 build）。
 四個 PR 的 lit 測試一起跑：`mlir/test/Dialect/{Arith,EmitC}`、`Conversion/{ArithToLLVM,ArithToEmitC}`、新增的 integration 測試，共 54 個全過。
