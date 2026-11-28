@@ -22,9 +22,25 @@
 **排隊用，不是現在送。** 09-14 對 banach-space 的承諾還在（審中的 PR 進或關之前不開新 PR），
 11-28 有九個 open PR。
 
+## ✅ 11-28 本機審查（補上面缺的三項）
+
+同日在本機補查：有 build（checkout base `376f04dd8bdb`）、有重現、原始碼對 `origin/main` `f496863dad20` 重驗、
+open PR 用 `gh pr list --search` 與 GitHub 搜尋 API 查過。**撞車是關鍵字搜尋，0 筆不等於沒有。**
+Discourse 沒查到（搜尋被限流，HTTP 429）。
+
+| 題 | 結論 | 一句話 |
+|---|---|---|
+| 1 `vscale` 範圍 | 🔧 **改寫**，與 `scalable-patch-candidates.md` 的 S-2 合成一題 | 只回下界 `[1, max]` 沒有效果，要有上界；上界在 IR 上已經有載體 |
+| 2 向量 op 傳範圍 | ❌ **刷掉** | 第 1 關補不出來 |
+| 3 padded `linalg.pack` | ⏸ **移出這份清單** | 是 `linalg`，不在兩條線（owner＝`arith`／範圍，被看見＝`vector`）裡 |
+| 4 transfer 降維支援 tensor | ✅ 維持 | TODO 還在，撞車 0 筆 |
+| 5 strided gather | ❌ **刷掉** | 已有三個 open PR 在動同一塊 |
+
+各題的細節寫在該題底下的「11-28 審查」。
+
 ---
 
-## 🥇 1. `vector.vscale` 沒有範圍資訊（一題算兩邊）
+## 🥇 1. `vector.vscale` 沒有範圍資訊（一題算兩邊）——🔧 11-28 審查後要改寫
 
 `mlir/include/mlir/Dialect/Vector/IR/VectorOps.td:3079`
 
@@ -61,9 +77,48 @@
 - **待查**：`affine.apply` 形式的 `ceildiv` 走的是 affine 的範圍推導，`vscale` 的下界傳不傳得過去沒確認。
 - **待查**：LLVM LangRef 對 `vscale` 的保證是「正整數」還是更強，寫 PR 描述前要查原文。
 
+### 11-28 審查：只回下界沒有效果
+
+用 `test.with_bounds` 假裝 `vscale` 有某個範圍，跑 `-int-range-optimizations`，看 `vscale * 8` 的範圍（輸入檔：[`vscale-range-probe.mlir`](vscale-range-probe.mlir)）：
+
+| `vscale` 的範圍 | `arith.muli %vscale, %c8` | `vscale * 8` 的範圍 | 推得出非零 |
+|---|---|---|---|
+| 現況（沒有 interface） | — | 全範圍；`vscale` 本身也是全範圍 | 否 |
+| `[1, UMAX]` | 無旗標 | 全範圍（乘法可能溢位） | 否 |
+| `[1, UMAX]` | `overflow<nuw>` | `umin = 8` | 是 |
+| `[1, UMAX]` | `overflow<nsw>` | 全範圍 | 否 |
+| `[1, SMAX]` | `overflow<nsw>` | `[8, SMAX]` | 是 |
+| `[1, 16]` | 無旗標 | `[8, 128]` | 是，`cmpi ne, 0` 折成 `true` |
+
+對照上面引用的使用者：
+
+- `transform-op-peel-and-vectorize.mlir` 的 `STEP` 是 `arith.muli %VSCALE, %C16 : index`，**沒有旗標** → 第二列，推不出。
+- `Integration/.../ArmSVE/contraction.mlir:74-75` 是先 `arith.index_cast %vscale : index to i32` 再 `divui`；
+  截斷到 `i32` 之後下界會丟（沒有上界時）→ 推不出。
+- `affine.apply` 降階出來的乘法帶 `nsw`（`Affine/Utils/Utils.cpp:68-70`），所以那條路要 `vscale` 的**有號**下界也是 1 才有用（第五列）。
+
+所以「`VectorScaleOp` 加 `InferIntRangeInterface` 回 `[1, max]`」這個做法**是對的但沒有可觀察的效果**，
+上面寫的「估 2 個檔 ＋ 1 個測試檔」只涵蓋這個沒有效果的版本。要有效果需要上界。
+
+**上界在 IR 上已經有載體**（上面「限制與待查」第一點要修正）：
+
+- `func.func` 可以掛 `llvm.vscale_range`，`convert-func-to-llvm` 會認並轉到 `llvm.func` 的 `vscale_range`
+  （`Conversion/Passes.td:526-531`、`LLVMOps.td:2155`、`LLVMAttrDefs.td:1506`）。
+- 另外有 pass 選項這條路：`VectorTransforms.h:120` 的 `VscaleRange`，`eliminateVectorMasks` 在用。
+
+所以設計問題是：**範圍分析要不要讀已經在 IR 上的 `llvm.vscale_range`**（`vector` 的 op 去讀 `llvm.` 開頭的屬性有分層問題），
+不是「上界要不要放進 IR」。這就是 S-2 提的 RFC 題目，兩題合成一題。
+
+**第 1 關的現況**：樹內沒有任何整合測試跑範圍分析（`grep -rl "int-range" mlir/test/Integration` 0 筆），
+`populateIntRangeOptimizationsPatterns`／`populateIntRangeNarrowingPatterns` 在樹內除了自己的 pass 沒有呼叫者，
+`getDivUISpeculatability` 只認常數除數。目前的證據是「`vscale` 出現在除法旁邊」，不是「有 pass 會用這個範圍」。
+下游線索：IREE 的 Codegen 有用 `IntegerRangeAnalysis`（`TensorDynamicDimAnalysis`、`PadDynamicAlloc` 等，GitHub code search），**沒有細看**它跟 `vscale` 有沒有關係。
+
+**撞車**：`vscale range`、`vscale InferIntRangeInterface` 的 open PR 與 issue 搜尋都是 0 筆。
+
 ---
 
-## 🥈 2. 多個整數向量 op 不傳範圍（一題算兩邊，第 1 關弱）
+## ~~🥈 2. 多個整數向量 op 不傳範圍（一題算兩邊，第 1 關弱）~~ ❌ 11-28 刷掉
 
 `mlir/include/mlir/Dialect/Vector/IR/VectorOps.td`
 
@@ -89,9 +144,17 @@
 **注意**：做成**一個有故事的 PR**（「narrowing 在哪些 op 斷掉、補上之後哪個例子能縮」），
 不要拆成八個一行的——那是 `Goal.md` §11.5 明說被看見線不收的純清理，而且會再踩一次量能警告。
 
+### 11-28 審查：第 1 關補不出來，刷掉
+
+- 樹內：`populateIntRangeNarrowingPatterns` 除了 `arith-int-range-narrowing` 這個 pass 自己，沒有呼叫者；整合測試沒有人跑它。
+- 下游：IREE 有呼叫，但在 `Dialect/Util/Transforms/OptimizeIntArithmetic.cpp`——那是 codegen 之前的 Util 層，處理的是純量與 index，沒有向量。
+- 六個有 interface 的 op 與行號重驗無誤（`:426`、`:750`、`:946`、`:2585`、`:2923`、`:3171`）。
+
+照上面自己訂的條件（「補不出來就降級或不做」）處理：不做。之後若找到對向量跑 narrowing 的 pipeline 再放回來。
+
 ---
 
-## 🥉 3. 帶 padding 的 `linalg.pack` 分解直接放棄
+## 🥉 3. 帶 padding 的 `linalg.pack` 分解直接放棄——⏸ 11-28 移出這份清單
 
 `mlir/lib/Dialect/Linalg/Transforms/Transforms.cpp:1230`
 
@@ -105,6 +168,14 @@ a non-unit un-tiled outer dim should be supported here.」。padding ＋ 非單�
 
 屬於 `linalg`，是路線圖的 M5（`Goal.md` §3.1），不是 `vector`。中等設計風險：
 padded pack 的 `tensor.pad` high pad 怎麼算。09-05 估 40～60 行。
+
+### 11-28 審查
+
+- FIXME 還在 `Transforms.cpp:1230-1231`；`git blame` 確認是 `ede2b5fe3ce6`（#218141，prometheusfma-llvm，2026-08-25）。
+- 撞車：`linalg.pack decompose padding` 的 open PR 搜尋 0 筆。
+- **不在兩條線內**：`Goal.md` §11.5 的 owner 線是 `arith`＋範圍／poison，被看見線是 `vector`；這題是 `linalg`，兩邊都不算，
+  也不符合 11-24 Federico 在 #245596 建議的「集中在一個子集」。題目本身沒問題，留在 09-05 那份清單（L-2）即可。
+  要做它，先在 `Goal.md` 明講被看見線包含 `linalg`。
 
 ---
 
@@ -122,9 +193,13 @@ padded pack 的 `tensor.pad` high pad 怎麼算。09-05 估 40～60 行。
 **這題的性質**：「rank reduction 該不該在 bufferization 之前發生在 tensor 上」是設計問題，
 預期有 review 辯論。**被看見的效果最強，但不會快**。想要一題大的時候再做。
 
+### 11-28 審查
+
+兩個 TODO 還在（`:485`、`:609`）。撞車：`transfer_read rank reduc tensor` 的 open PR 搜尋 0 筆。結論不變。
+
 ---
 
-## 5. strided gather 的改寫限制太多
+## ~~5. strided gather 的改寫限制太多~~ ❌ 11-28 刷掉
 
 `mlir/lib/Dialect/Vector/Transforms/LowerVectorGather.cpp:114`、`:121`、`:131`、`:139`、`:147`
 
@@ -133,6 +208,19 @@ padded pack 的 `tensor.pad` high pad 怎麼算。09-05 估 40～60 行。
 - ① `XeGPUVectorLinearize.cpp` 呼叫它；整合測試 `CPU/gather.mlir`（08-21 的證據，沒重驗）
 - ② GPU codegen（經 XeGPU）——**五題裡關鍵字最弱**
 - ⑤ **沒查**；08-21 時周邊 XeGPU 很擠
+
+### 11-28 審查：已有人在做，刷掉
+
+五個 TODO 還在（`:114`、`:121`、`:131`、`:139`、`:147`），但同一塊有三個 open PR：
+
+| PR | 內容 | 作者 | 最後更新 |
+|---|---|---|---|
+| #189178 | Remove unit-stride check in `Gather1DToConditionalLoads` | jtuyls | 2026-04-07 |
+| #194395 | Make gather/scatter index dimensions separately | krzysz00 | 2026-05-11 |
+| #241601 | Do not fold contiguous gather/scatter on non-unit strides | aeft | 2026-11-26 |
+
+另有 #181357（banach-space，釐清 gather/scatter 索引語意）、#132227（Groverkss，多維 scatter）。
+語意本身還在被改，關鍵字又是五題裡最弱的，不做。#241601 可以當 review 的對象。
 
 ---
 
@@ -145,11 +233,27 @@ padded pack 的 `tensor.pad` high pad 怎麼算。09-05 估 40～60 行。
 
 ## 建議順序
 
-1 → （2 或 3 擇一）→ 4。
+~~1 → （2 或 3 擇一）→ 4。~~
+
+**11-28 審查後**：這份清單剩 1（改寫後與 S-2 合併）與 4。
+
+- **1 不再是小題**：要連上界一起處理，而且得先回答「分析讀不讀 `llvm.vscale_range`」。它現在是 owner 線的設計題，
+  適合先在 Discourse 問，不是直接開 PR。動手前先把第 1 關補實：找出一條真的會用到這個範圍的 pass 或下游。
+- **4 留到想要一題大的**。
+- 2、5 刷掉；3 移回 09-05 的清單。
+- scalable 那份清單多了一題小的、可以獨立送的：`rewrite_narrow_types` 遇到 scalable 向量 assert 失敗（S-1a）。
+- 以上全部受 09-14 的承諾限制，現在都不能開。可以先做的是 review：
+  #244284（scalable `transfer_read`／`transfer_write` 的 unrolling，Vaisman，11-25；可以用 qemu 環境實跑）、
+  #208873（Guard transfer read narrow type emulation，qyingwu，11-27；與 #221185 同一個檔）。
+
+<details>
+<summary>審查前的順序與理由（留底）</summary>
 
 - **先做 1**：小、兩條線都算、SVE 關鍵字，而且讓 A-③ 不再是沒有使用者的基礎建設。
 - **2 要先補第 1 關**，補不出來就換 3。
 - **4 留到想要一題大的**。5 放最後。
+
+</details>
 
 ## 順便看到的（沒過濾，留給下次掃描）
 

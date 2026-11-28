@@ -724,8 +724,8 @@ commit access 是**入場券，不是頭銜**：門檻是一定數量的好 patc
 | | **owner 線**：`arith`＋範圍／poison 分析 | **被看見線**：`vector` |
 |---|---|---|
 | 目標 | 這一塊的事別人預設找我，最後列進 `mlir/Maintainers.md` | 履歷與 commit 紀錄上有 AI codegen 的關鍵字，vector 的 reviewer 認得我 |
-| 為什麼是這裡 | 有空位：CODEOWNER 只有一人，沒有 KnownBits、沒有浮點範圍分析，`ub` 只有兩個 op | AI pipeline 必經之路（§3.2），關鍵字最密：vectorization、masking、SVE／RVV |
-| 在這裡當不了什麼 | 關鍵字弱，讀起來是「通用中端／正確性」 | owner：近 12 個月 57 位作者，maintainer 是全職的 |
+| 為什麼是這裡 | 有空位：範圍分析那幾個檔的 CODEOWNER 只有 krzysz00 一人，近 12 個月 29 個 commit、他本人 2 個（`arith` dialect 本身是 kuhar＋krzysz00 兩人）；沒有 KnownBits、沒有浮點範圍分析，`ub` 只有兩個 op | AI pipeline 必經之路（§3.2），關鍵字最密：vectorization、masking、SVE／RVV |
+| 在這裡當不了什麼 | 關鍵字弱，讀起來是「通用中端／正確性」 | owner：近 12 個月 69 位作者、221 個 commit，maintainer 是全職的 |
 | 選什麼題 | 補這一塊缺的能力、定語意、修 soundness；小修也收，因為 owner 要連雜事都管 | 只挑**講得出下游是誰**的題（§8.7 第 1 關要有整合測試或真實 pipeline 當證據）；不收純清理 |
 | 怎麼算做得好 | 被加進 requested reviewers、被 cc 的次數；我 review 的量；RFC | merged 的題目能不能在履歷寫成一句有關鍵字、有數字的話 |
 | review | **主力**：這一塊的 PR 盡量每個都看 | 只看與自己 PR 相關的 |
@@ -738,7 +738,12 @@ commit access 是**入場券，不是頭銜**：門檻是一定數量的好 patc
   fuzzer＋SMT 能驗的命題）、能力可轉移（poison／range／KnownBits 是任何 compiler 團隊都懂的中端概念）。
 - 被看見線贏在：關鍵字與見效速度。owner 路線要一兩年才看得到結果，這條線幾個月就有東西可寫。
 - 只做 owner 線，會回到 08-08 之前「技術紮實、關鍵字零重疊」的問題（§1.3）；
-  只做被看見線，永遠是 57 人之一。
+  只做被看見線，永遠是六十幾人之一。
+
+> **11-28 重數**（`git log --since="12 months ago"`，`lib/Dialect/X`＋`include/mlir/Dialect/X`，`origin/main` `f496863dad20`）：
+> `vector` 69 位作者、221 個 commit；`arith` 60 位作者、120 個 commit。作者數兩邊差不多，量是 `vector` 的一半左右。
+> 所以「有空位」指的是**範圍分析**（上表那 29 個 commit），不是整個 `arith` dialect。
+> `mlir/Maintainers.md` 的 `arith` 是 core＋kuhar＋krzysz00。
 
 **最划算的題目是一題算兩邊的**：分析在 owner 線、使用者在 `vector`／`linalg`。
 例如用範圍分析推 `in_bounds`、消邊界檢查、幫 LICM 搬除法、支撐量化的窄整數。

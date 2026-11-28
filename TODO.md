@@ -70,9 +70,12 @@
 gh api repos/llvm/llvm-project --jq .permissions.push   # 要是 true
 ```
 
+**11-28 本機實查：回 `false`。** `gh api orgs/llvm/members/Tim096` 回 404（不是公開成員，或還不是成員）。
+是邀請還沒發、還沒接受，還是 token 看不到，沒有再往下查。在它變成 `true` 之前，下面「拿到之後改變的事」都還不能做。
+
 拿到之後改變的事：
 
-- [ ] **自己 merge #221185，當第一次**（11-25 的決定）。照 11-25 段落的檢查表：Squash and merge、
+- [ ] **自己 merge #221185，當第一次**（11-25 的決定）。**11-28 查：#221185 仍 OPEN、沒有 approve（最後更新 11-24），加上 push 還是 `false`，目前做不了。**照 11-25 段落的檢查表：Squash and merge、
       標題／描述與 PR 一致、作者 email 是 `tseng.tim096@gmail.com`、CI 綠、與 main 無衝突。
 - [ ] 其餘 open PR：拿到 approve 就自己 land，不必再請人。**仍然等 approve 才 merge**，commit access 不是免審。
 - [ ] review 別人的 PR 可以正式按 APPROVE（之前 API 回 422，只能 COMMENT）。已審過、結論是 LGTM 的
@@ -101,14 +104,20 @@ gh api repos/llvm/llvm-project --jq .permissions.push   # 要是 true
 
 | # | 題目 | 位置 | 關鍵字 | 算兩邊 | 動手前要補 |
 |---|---|---|---|---|---|
-| 1 | `vector.vscale` 沒有範圍資訊（回 `[1, max]`） | `VectorOps.td:3079` | SVE／RVV | ✅ A-③ 的第一個客戶 | 撞車；重現 `remui` by `vscale*8` 的現況；`affine.apply` 的 `ceildiv` 傳不傳得過去；LangRef 對 `vscale` 的原文 |
-| 2 | `shuffle`／`interleave`／`deinterleave`／`from_elements` 等不傳範圍 | `VectorOps.td`（只有 6 個 op 有） | quantization | ✅ | **第 1 關沒證據**：找出對向量跑 `arith-int-range-narrowing` 的 pipeline，找不到就不做 |
-| 3 | padded `linalg.pack` 分解放棄（09-05 的 L-2） | `Linalg/Transforms/Transforms.cpp:1230` | tensor layout、tiling | ❌ | 撞車；先 @ #218141 作者 |
-| 4 | `transfer_read/write` 降維不支援 tensor（08-21 第 4 名） | `VectorTransferOpTransforms.cpp:485`、`:609` | vectorization | ❌ | 撞車；預期有設計辯論 |
-| 5 | strided gather 限制太多（08-21 第 5 名） | `LowerVectorGather.cpp:114`–`:147` | GPU codegen（弱） | ❌ | 撞車 |
+| 1 | `vector.vscale` 沒有範圍資訊（回 `[1, max]`） | `VectorOps.td:3079` | SVE／RVV | ✅ A-③ 的第一個客戶 | 🔧 **11-28 審查：要改寫**。只回下界時 `vscale * 8` 仍是全範圍，推不出非零；要有上界。與 S-2 合成一題 |
+| 2 | `shuffle`／`interleave`／`deinterleave`／`from_elements` 等不傳範圍 | `VectorOps.td`（只有 6 個 op 有） | quantization | ✅ | ❌ **11-28 刷掉**：第 1 關補不出來（樹內無呼叫者；IREE 的 narrowing 在 Util 層，沒有向量） |
+| 3 | padded `linalg.pack` 分解放棄（09-05 的 L-2） | `Linalg/Transforms/Transforms.cpp:1230` | tensor layout、tiling | ❌ | ⏸ **11-28 移出**：是 `linalg`，不在兩條線內。FIXME 還在、撞車 0 筆，留在 09-05 的清單 |
+| 4 | `transfer_read/write` 降維不支援 tensor（08-21 第 4 名） | `VectorTransferOpTransforms.cpp:485`、`:609` | vectorization | ❌ | ✅ 維持。TODO 還在、撞車 0 筆；預期有設計辯論 |
+| 5 | strided gather 限制太多（08-21 第 5 名） | `LowerVectorGather.cpp:114`–`:147` | GPU codegen（弱） | ❌ | ❌ **11-28 刷掉**：#189178、#194395、#241601 三個 open PR 在動同一塊 |
 
-- [ ] 題 1：查撞車 ＋ 本機重現現況（建議第一個做）
-- [ ] 題 2：補第 1 關證據，補不出來就換題 3
+**11-28 本機審查**（有 build、有重現、open PR 用 `gh` 關鍵字搜尋；Discourse 沒查到）。細節在兩份筆記各題的「11-28 審查」。
+
+- [x] 題 1：查撞車 ＋ 本機重現現況 → 撞車 0 筆；重現後發現只回下界沒有效果（`muli` 無旗標會溢位、`index_cast` 到 `i32` 會丟下界）。
+  上界在 IR 上已有載體：`func.func` 的 `llvm.vscale_range`。**題 1 與 S-2 合成一題，先回答「範圍分析讀不讀 `llvm.vscale_range`」**
+- [ ] 題 1＋S-2：把第 1 關補實——找出一條真的會用到 `vscale` 範圍的 pass 或下游（IREE 的 Codegen 有用 `IntegerRangeAnalysis`，沒細看）
+- [x] 題 2：補第 1 關證據 → 補不出來，刷掉
+- 可以先 review 的 open PR（不受 09-14 承諾限制）：#244284（scalable `transfer_read`／`transfer_write` unrolling，可用 qemu 實跑）、
+  #208873（與 #221185 同一個檔）、#241601（gather）
 - [x] 專門掃一次 scalable → 11-28 已掃，[`notes/scalable-patch-candidates.md`](notes/scalable-patch-candidates.md)
 
 **scalable 掃描結果（11-28）**：`mlir/lib` 82 行帶限制字眼的 `scalab`，多數是本質上做不到（編譯期無法展開 scalable 維度），
@@ -116,9 +125,10 @@ gh api repos/llvm/llvm-project --jq .permissions.push   # 要是 true
 
 | # | 題目 | 位置 | 關鍵字 | 狀態 |
 |---|---|---|---|---|
-| S-1 | 子位元組 ext／trunc 的 aligned 改寫被共用前置條件擋掉 scalable（用到的 op 其實都支援） | `VectorEmulateNarrowType.cpp:1620`；`:1795-1805` 會丟 scalable 旗標 | quantization ＋ SVE／RVV | **等 #221185 進了再開**（同一組函式）；後端已驗（11-28）：不改寫的形式後端報錯，改寫後的形式編得過且值對 |
-| S-2 | scalable `vector.step` 沒有範圍；`vscale` 上下界只是 pass 選項 | `VectorOps.cpp:8644`；`Vector/Transforms/Passes.td:33`／`:35` | SVE／RVV | 接在上表題 1 之後；`vscale` 範圍放 IR 還是 pass 選項，是 RFC 的候選題 |
-| S-3 | scalable `linalg.pack` 向量化（上游在兩個 SVE 整合測試點名，issue #159751） | `Vectorization.cpp:2424-2428` | vectorization ＋ tensor layout ＋ SVE | **不直接開 PR**：先看 #159751 現況、留言問；有人做就改成 review |
+| S-1a | **新（11-28 審查）**：`rewrite_narrow_types` 遇到 scalable 的 `bitcast`＋`ext`、`trunc`＋`bitcast` 會 assert 失敗（rc=134）；pattern 先建 `BitCastRewriter` 才檢查前置條件 | `VectorEmulateNarrowType.cpp:1577-1580`、`:1996-1999`、`:2060-2063`（`origin/main`） | quantization ＋ SVE／RVV | 小、可獨立送；搜尋沒有相關的 open PR／issue。同檔另有 #199243、#208873 |
+| S-1b | 子位元組 ext／trunc 的 aligned 改寫被共用前置條件擋掉 scalable（用到的 op 其實都支援） | `VectorEmulateNarrowType.cpp:1620`；`:1795-1805` 會丟 scalable 旗標 | quantization ＋ SVE／RVV | **等 #221185 進了再開**（同一組函式；11-28 仍 OPEN、沒 approve）；後端已驗（11-28）：不改寫的形式後端報錯，改寫後的形式編得過且值對。下游：IREE 的 `Codegen/Common/EmulateNarrowType.cpp` 會呼叫這組 pattern |
+| S-2 | scalable `vector.step` 沒有範圍；`vscale` 上下界只是 pass 選項 | `VectorOps.cpp:8644`；`Vector/Transforms/Passes.td:33`／`:35` | SVE／RVV | **11-28 審查：與上表題 1 合成一題**。上界在 IR 上已有 `llvm.vscale_range`，RFC 的問題改成「範圍分析讀不讀它」 |
+| S-3 | scalable `linalg.pack` 向量化（上游在兩個 SVE 整合測試點名，issue #159751） | `Vectorization.cpp:2424-2428` | vectorization ＋ tensor layout ＋ SVE | **不直接開 PR**。11-28 查：#159751 OPEN，2025-09-19 由 banach-space 開、assignee 也是他，之後沒人回；撞車 0 筆 |
 
 - [x] 建 qemu-aarch64 ＋ SVE 的實跑環境 → **11-28 建好，免 root**：qemu 6.2 ＋ sysroot 在 `~/aarch64-cross`，AArch64 版 `mlir-runner` 在 `~/llvm-project/build-aarch64`，
   host build 打開 `MLIR_RUN_ARM_SVE_TESTS`。上游 ArmSVE 整合測試 **18／18 過**。腳本 `tools/sve-qemu/setup.sh`，細節見 [`notes/scalable-patch-candidates.md`](notes/scalable-patch-candidates.md) 文末〈實跑環境〉
@@ -126,7 +136,8 @@ gh api repos/llvm/llvm-project --jq .permissions.push   # 要是 true
   aligned 改寫會產生的形式編得過，qemu 下 128／256／512 bit 值全對。後端風險不成立，S-1 不降級
 - [ ] 新候選（建環境時發現）：上游 7 個 ArmSVE 整合測試傳 `%mlir_runner_utils`（host 函式庫）給模擬器裡的 runner，該用 `%native_mlir_runner_utils`；
   模擬器下這 7 個跑不起來，上游 main `f496863dad20` 仍如此。7 個檔各改一行。撞車只粗查過（0 筆）
-- [ ] S-3：讀 #159751，決定留言或 review
+- [x] S-3：讀 #159751 → OPEN、assignee 是 banach-space、一年多沒動。沒有 PR 可以 review；留言的對象是 09-14 承諾的對象，等手上的 PR 消化掉一些再貼
+- [ ] S-1a：修 `rewrite_narrow_types` 對 scalable 的 assert（排隊；受 09-14 承諾限制）
 - 不要碰：mixed-mode `vector.contract`（`LowerVectorContract.cpp:918`），08-21 時被 #117753 佔著，現況沒查。
 
 ### 📌 2026-11-24：#221298 merge、Discourse 回覆通過審核

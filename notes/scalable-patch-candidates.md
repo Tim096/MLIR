@@ -8,9 +8,11 @@
 ## ⚠️ 查證程度（與 `visibility-track-candidates.md` 相同，比 8、9 月兩次掃描低）
 
 - ✅ 行號與原文：讀原始碼確認。
-- ❌ **沒有 build、沒有重現。** 每一題的「現況」都是讀 code 的結論。
-- ❌ **沒查 open PR 撞車。** 掃描的 session 讀不到 `llvm/llvm-project` 的 PR／issue。
-  下面引用的 issue 編號（#159751 等）是從樹裡的註解抄的，**issue 現在的狀態沒看**。
+- ~~❌ 沒有 build、沒有重現。每一題的「現況」都是讀 code 的結論。~~
+  ✅ **11-28 本機補查**：有 build（checkout base `376f04dd8bdb`）、三題的「現況」都重現或對 `origin/main` `f496863dad20` 重驗。
+  結果寫在各題底下的「11-28 審查」。**S-1 的「現況」有一處寫錯**（不是全部被擋掉，有兩種輸入是 assert 失敗）。
+- ~~❌ 沒查 open PR 撞車。~~ ✅ **11-28 用 `gh pr list --search` 與 GitHub 搜尋 API 查過**，#159751 的現況也看了。
+  是關鍵字搜尋，0 筆不等於沒有。
 - ✅ **scalable 的題目要能實跑才算驗過**（比照 `Goal.md` §2.4 09-04 那條 GPU 的規則）。
   本機沒有 SVE 硬體，靠 qemu-aarch64 跑 `ArmSVE/` 整合測試——**11-28 環境已建好**，上游 18 個 ArmSVE 整合測試在 qemu 下全過。
   做法與指令見文末〈實跑環境〉。
@@ -72,6 +74,52 @@ MLIR 這層改對了，若 AArch64 後端對子位元組 scalable 型別 legaliz
 所以後端風險不成立，而且方向相反：**不改寫的形式後端直接報錯，改寫後的形式才編得過**。
 這題從「效能改寫」變成「讓 scalable 子位元組向量能通過後端」。
 
+### 11-28 審查：有兩種輸入不是被擋掉，是 assert 失敗（新題 S-1a）
+
+上面「現況」寫的是「`commonConversionPrecondition` 第一行就擋 scalable」。在 MLIR 層實跑
+`transform.apply_patterns.vector.rewrite_narrow_types`（會 abort 的兩種輸入存在 [`narrow-types-scalable-assert.mlir`](narrow-types-scalable-assert.mlir)）：
+
+| 輸入 | 結果 |
+|---|---|
+| 固定長度：`bitcast vector<8xi8> → vector<16xi4>` ＋ `extsi → vector<16xi8>` | 改寫成 `shli`／`shrsi`／`vector.interleave` |
+| scalable：只有 `extsi vector<[16]xi4> → vector<[16]xi8>` | 不變（被前置條件擋掉，符合上面的描述） |
+| scalable：`bitcast vector<[8]xi8> → vector<[16]xi4>` ＋ `extsi` | **`mlir-opt` abort，rc=134** |
+| scalable：`trunci vector<[16]xi8> → vector<[16]xi4>` ＋ `bitcast → vector<[8]xi8>` | **`mlir-opt` abort，rc=134** |
+
+```
+VectorEmulateNarrowType.cpp:1576: BitCastBitsEnumerator::BitCastBitsEnumerator(VectorType, VectorType):
+Assertion `sourceVectorType.getRank() == 1 && !sourceVectorType.isScalable() && "requires -D non-scalable vector type"' failed.
+```
+
+原因：`RewriteExtOfBitCast` 與 `RewriteBitCastOfTruncI` 是**先建 `BitCastRewriter` 再檢查前置條件**
+（`origin/main` 的 `:1996-1999`、`:2060-2063`），而 `BitCastRewriter` 的建構子會建 `BitCastBitsEnumerator`，
+它一開頭就 assert 非 scalable（`:1577-1580`，2023-09 起就在）。所以這兩種形式輪不到前置條件說「scalable vector」。
+沒有 assert 的 build 會怎樣**沒測**。
+
+這兩種正好是實際會出現的形式（子位元組資料以 `i8` 向量載入，`bitcast` 成 `i4` 再擴展；或截斷後 `bitcast` 回 `i8`）。
+
+**這一題拆成兩步**：
+
+- **S-1a（新）：修 assert。** 在建 `BitCastRewriter` 之前先檢查 scalable 並 `notifyMatchFailure`。
+  小、獨立、不依賴 #221185 的內容（但同一個檔，rebase 時要注意）。測試加在 `vector-rewrite-narrow-types.mlir`。
+- **S-1b：原本的題目。** 讓 aligned 那組改寫收 scalable 向量。
+
+**第 1 關比上表寫的強**：IREE 的 `compiler/src/iree/compiler/Codegen/Common/EmulateNarrowType.cpp` 與
+`Codegen/SPIRV/ConvertToSPIRV.cpp` 呼叫 `populateVectorNarrowTypeRewritePatterns`（GitHub code search），
+所以下游不只樹內那兩個呼叫者。IREE 在 SVE 目標上會不會真的走到 scalable 子位元組向量，**沒查**。
+樹內則是**沒有任何測試**出現 scalable 的 `i2`～`i7` 向量型別（`grep` 0 筆），這個組合目前沒人測。
+
+**原始碼重驗**：`commonConversionPrecondition` 在 `origin/main` 是 `:1617-1621`；aligned 那兩個 pattern 各自呼叫它
+（`:2139` 與 `:2205` 附近）；`bitcastSubByteVectorToI8` 用 `VectorType::get(vecShape, i8)`，會丟 scalable 旗標——都與上面寫的一致。
+
+**撞車**：
+
+- S-1a：`BitCastBitsEnumerator`、`rewrite_narrow_types scalable`、`RewriteExtOfBitCast scalable` 的 PR／issue 搜尋，沒有相關的 open 項目。
+- 同一個檔另有兩個 open PR：#199243（bjacob，`RewriteExtOfBitCast` 丟掉 sign extension，2026-05-27 後沒動）、
+  #208873（qyingwu，Guard transfer read narrow type emulation，11-27 還在動）。
+- 鄰近的活動：#245508、#245296 是 XeGPU 的 `i4`（固定長度）。
+- **#221185 仍是 OPEN，沒有 approve**（11-28 查，最後更新 11-24）。
+
 ---
 
 ## 🥈 S-2. `vector.vscale`／scalable `vector.step` 沒有範圍（已在另一份清單，這裡補充）
@@ -86,6 +134,17 @@ MLIR 這層改對了，若 AArch64 後端對子位元組 scalable 型別 legaliz
 - **這是一個可以寫成 RFC 的問題**：`vscale` 的範圍該放在 IR 上（函式屬性，對應 LLVM 的 `vscale_range`）
   還是繼續當 pass 選項？現在 `IntegerRangeAnalysis` 與 `ValueBounds` 兩套各自為政。
   owner 線的 RFC 從這裡切入，比純講 poison 語意更容易有人在乎。**這是我的判斷，沒有人在上游提過（沒查）。**
+
+### 11-28 審查：RFC 的問題要改寫
+
+- `StepOp::inferResultRanges` 對 scalable 直接 `return`：重驗無誤（`origin/main` `VectorOps.cpp:8641-8646`）。
+- **上界在 IR 上已經有載體**：`func.func` 可以掛 `llvm.vscale_range`，`convert-func-to-llvm` 會認並轉到 `llvm.func` 的
+  `vscale_range`（`Conversion/Passes.td:526-531`、`LLVMOps.td:2155`）。pass 選項是另一條路（`VectorTransforms.h:120` 的 `VscaleRange`）。
+  所以問題不是「放 IR 還是 pass 選項」，而是「**`IntegerRangeAnalysis`／`ValueBounds` 要不要讀已經在 IR 上的 `llvm.vscale_range`**」，
+  以及 `vector` 的 op 去讀 `llvm.` 開頭的屬性算不算破壞分層。
+- 這一題與 `visibility-track-candidates.md` 的第 1 題**合成一題**：那邊實測過，`vscale` 只有下界時 `vscale * 8` 仍推不出非零，要有上界才有效果。
+  順序從「先做 `vscale`，再做這個」改成「先定上界從哪裡來，再一起做 `vscale` 與 `step`」。
+- 上游有沒有人談過：GitHub 的 PR／issue 搜尋 0 筆；Discourse 沒查到（搜尋被限流）。
 
 ---
 
@@ -112,6 +171,17 @@ supported ATM」（`:1599-1600`）和 scalable 維度的 `shape_cast`／`transpo
 **怎麼用這一題**：不要直接開 PR。**先去 #159751 看現況、留言問有沒有人在做**。
 有人在做 → 改成 review 那個 PR（被看見的效果一樣有，成本低很多）。沒人做 → 問能不能拆一小塊。
 這題的價值有一半在「跟 `vector`／`linalg` 的 maintainer 建立工作關係」。
+
+### 11-28 審查
+
+- **#159751 現況**：OPEN，「[mlir] Vectorize linalg.pack + linalg.unpack in the e2e tests」，
+  2025-09-19 由 **banach-space 開、assignee 也是 banach-space**，之後只有一則 bot 留言，沒有人回。
+- 兩個 TODO 重驗無誤：`ArmSVE/pack-unpack-scalable-inner-tile.mlir:34`、`ArmSVE/pack-unpack-mmt4d.mlir:46-47`
+  （`ArmSME/pack-unpack-mmt4d.mlir:46` 也引用同一個 issue）。Cond 1 在 `Vectorization.cpp:2424-2428`，只放行 `UnPackOp`。
+- 撞車：`vectoriz linalg.pack scalable`、`linalg.pack vectorization` 的 open PR 搜尋 0 筆。
+- 鄰近的活動：#235596（chenmiaoming，scalable index 與 scalable forall tiling，11-24 merge）帶進一批
+  `scalable-pack-*`／`scalable-unpack-*` 測試；pack／unpack 的向量化 11 月有 #239599（FedericoBruzzone）。
+- **「去留言問」的對象就是 banach-space**——09-14 承諾的對象，09-13 講過量能不夠。這則留言等手上的 PR 消化掉一些再貼。
 
 ---
 
@@ -163,9 +233,11 @@ supported ATM」（`:1599-1600`）和 scalable 維度的 `shape_cast`／`transpo
 ## 建議
 
 1. ~~先建 qemu-aarch64 ＋ SVE 的實跑環境，並用一段手寫 LLVM IR 驗 S-1 的後端風險。~~ ✅ 11-28 兩件都做完，S-1 不用降級。
-2. **S-1 等 #221185 進了再開。**
-3. **S-2 先做 `vscale` 那一半**（另一份清單的第 1 題），不需要 SVE 環境，只要 lit。
-4. **S-3 先去 #159751 留言，不寫 code。**
+2. **S-1 拆兩步**（11-28 審查）：S-1a 修 assert，小、可獨立送；S-1b 等 #221185 進了再開。#221185 目前 OPEN、沒有 approve。
+3. ~~S-2 先做 `vscale` 那一半（另一份清單的第 1 題），不需要 SVE 環境，只要 lit。~~
+   **11-28 審查**：`vscale` 只有下界沒有效果，S-2 與那一題合成一題，先回答「分析讀不讀 `llvm.vscale_range`」。
+4. **S-3 不寫 code**；#159751 的 assignee 是 banach-space，留言的時機排在手上 PR 消化之後。
+5. 以上都受 09-14 的承諾限制，現在不能開新 PR。
 
 順帶一提：被看見線在 scalable 這個方向的題目**比預期少**。SVE 的支援是 Arm 團隊系統性做的，
 剩下的缺口多半是他們判斷過「做不到」或「還沒有動機」的。要在這裡被看見，
