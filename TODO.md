@@ -116,8 +116,9 @@ gh api repos/llvm/llvm-project --jq .permissions.push   # 要是 true
   上界在 IR 上已有載體：`func.func` 的 `llvm.vscale_range`。**題 1 與 S-2 合成一題，先回答「範圍分析讀不讀 `llvm.vscale_range`」**
 - [ ] 題 1＋S-2：把第 1 關補實——找出一條真的會用到 `vscale` 範圍的 pass 或下游（IREE 的 Codegen 有用 `IntegerRangeAnalysis`，沒細看）
 - [x] 題 2：補第 1 關證據 → 補不出來，刷掉
-- 可以先 review 的 open PR（不受 09-14 承諾限制）：#244284（scalable `transfer_read`／`transfer_write` unrolling，可用 qemu 實跑）、
-  #208873（與 #221185 同一個檔）、#241601（gather）
+- 可以先 review 的 open PR（不受 09-14 承諾限制）：#208873（與 #221185 同一個檔）、#241601（gather）
+- #244284（scalable `transfer_read`／`transfer_write` unrolling）：**11-28 已貼**（pullrequestreview-6098309196，COMMENT）→ [`patches/2026-11-28-review-244284.md`](patches/2026-11-28-review-244284.md)。
+  本機分支 `review/pr-244284`（PR head `6f2b2317d9`）；lit 108／108、qemu SVE 128／256／512 bit 都過；一個既有負面測試守不住它的判斷
 - [x] 專門掃一次 scalable → 11-28 已掃，[`notes/scalable-patch-candidates.md`](notes/scalable-patch-candidates.md)
 
 **scalable 掃描結果（11-28）**：`mlir/lib` 82 行帶限制字眼的 `scalab`，多數是本質上做不到（編譯期無法展開 scalable 維度），
@@ -1657,7 +1658,7 @@ PR 描述（＝ commit 訊息，squash merge 後就是它）：[`patches/m1b-sca
 | AArch64 建置目錄 | `~/llvm-project/build-aarch64`（只有 `mlir-runner`／`lli`／runner 函式庫，給 qemu 用） |
 | qemu ＋ AArch64 sysroot | `~/aarch64-cross`（免 root；qemu 6.2，有 SVE／SVE2，沒有 SME） |
 | 機器 | 16 核 / 31GB RAM / 928GB 可用 |
-| Toolchain | clang 14.0.0、lld 14、ninja 1.10.1、ccache 4.5.1、cmake 3.22.1、z3 4.8.12 |
+| Toolchain | clang 14.0.0、lld 14、ninja 1.10.1、ccache 4.5.1、cmake 3.31.6（`pip install --user`，在 `~/.local/bin`；系統的 3.22.1 還在 `/usr/bin`。上游 11-19 起最低要 3.31）、z3 4.8.12 |
 
 **⚠️ 不要把任何東西放回 `/mnt/*`（Windows 磁碟）。** 理由見 `Goal.md` §2.4 決策日誌。
 
