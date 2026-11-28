@@ -109,7 +109,20 @@ gh api repos/llvm/llvm-project --jq .permissions.push   # 要是 true
 
 - [ ] 題 1：查撞車 ＋ 本機重現現況（建議第一個做）
 - [ ] 題 2：補第 1 關證據，補不出來就換題 3
-- [ ] 專門掃一次 scalable（約 20 處「scalable vectors are not supported」，清單在 notes 檔尾）
+- [x] 專門掃一次 scalable → 11-28 已掃，[`notes/scalable-patch-candidates.md`](notes/scalable-patch-candidates.md)
+
+**scalable 掃描結果（11-28）**：`mlir/lib` 82 行帶限制字眼的 `scalab`，多數是本質上做不到（編譯期無法展開 scalable 維度），
+過第 1、2 關的只有三題。查證程度與上表相同：**沒 build、沒重現、沒查撞車**。
+
+| # | 題目 | 位置 | 關鍵字 | 狀態 |
+|---|---|---|---|---|
+| S-1 | 子位元組 ext／trunc 的 aligned 改寫被共用前置條件擋掉 scalable（用到的 op 其實都支援） | `VectorEmulateNarrowType.cpp:1620`；`:1795-1805` 會丟 scalable 旗標 | quantization ＋ SVE／RVV | **等 #221185 進了再開**（同一組函式）；先驗 LLVM 後端吃不吃 `<vscale x N x i4>` |
+| S-2 | scalable `vector.step` 沒有範圍；`vscale` 上下界只是 pass 選項 | `VectorOps.cpp:8644`；`Vector/Transforms/Passes.td:33`／`:35` | SVE／RVV | 接在上表題 1 之後；`vscale` 範圍放 IR 還是 pass 選項，是 RFC 的候選題 |
+| S-3 | scalable `linalg.pack` 向量化（上游在兩個 SVE 整合測試點名，issue #159751） | `Vectorization.cpp:2424-2428` | vectorization ＋ tensor layout ＋ SVE | **不直接開 PR**：先看 #159751 現況、留言問；有人做就改成 review |
+
+- [ ] 建 qemu-aarch64 ＋ SVE 的實跑環境（scalable 題目共同的前置；比照 09-04「GPU patch 要在硬體上跑過」）
+- [ ] S-1：手寫 LLVM IR 丟 `llc -mattr=+sve`，確認子位元組 scalable bitcast 過得了後端
+- [ ] S-3：讀 #159751，決定留言或 review
 - 不要碰：mixed-mode `vector.contract`（`LowerVectorContract.cpp:918`），08-21 時被 #117753 佔著，現況沒查。
 
 ### 📌 2026-11-24：#221298 merge、Discourse 回覆通過審核
