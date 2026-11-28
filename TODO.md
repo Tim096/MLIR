@@ -87,7 +87,8 @@ gh api repos/llvm/llvm-project --jq .permissions.push   # 要是 true
 
 | §11.4 準則 | 現況 | 下一步 |
 |---|---|---|
-| 只在一塊深耕 | 主攻區塊 11-25 已定：`arith`＋範圍／poison 分析 | 主線 A（poison 四題）照走；B-1（#241712，本機 `31ad4548426c`）何時送由本人決定 |
+| owner 只在一塊當（owner 線） | 11-25 已定：`arith`＋範圍／poison 分析 | 主線 A（poison 四題）照走，與「一題算兩邊」的題（如 A-④）交錯排；B-1（#241712，本機 `31ad4548426c`）何時送由本人決定 |
+| `vector` 是被看見線（`Goal.md` §11.5，本人 11-28 決定） | 11-25 的「`vector` 不開新題」放寬：可以開，但只挑講得出下游是誰的題 | 還沒選題；09-14 的承諾與 09-11 的節奏對兩條線合計 |
 | review 量追上 patch 量 | 兩批八則＋#235199 已貼；13 個 merged、9 個 open | 維持一天一到兩則、每則本機實跑；下一批候選 #230976、#245151 |
 | RFC／講題（M∞） | Discourse `ub.assume` 串第 19 則已公開，matthias-springer 未回 | A-①「可能是 poison」分析是 RFC 的候選題；先等第 19 則的回覆、與 #152932 協調 |
 
