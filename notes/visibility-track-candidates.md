@@ -157,3 +157,5 @@ padded pack 的 `tensor.pad` high pad 怎麼算。09-05 估 40～60 行。
 「scalable vectors are not supported」，例如 `LowerVectorBroadcast.cpp:128`（08-21 已因第 2 關刷掉）、
 `VectorToSCF.cpp:339`／`:736`、`LowerVectorScan.cpp:129`、`VectorTransforms.cpp:954`／`:1280`／`:1350`／`:1557`、
 `Vectorization.cpp:1600`／`:3913`。SVE／RVV 是被看見線關鍵字最強的方向，值得專門掃一次並逐條過四關。
+
+> ✅ **同日已掃**：[`scalable-patch-candidates.md`](scalable-patch-candidates.md)。82 行裡過關的只有三題。
