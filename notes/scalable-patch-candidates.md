@@ -11,8 +11,9 @@
 - ❌ **沒有 build、沒有重現。** 每一題的「現況」都是讀 code 的結論。
 - ❌ **沒查 open PR 撞車。** 掃描的 session 讀不到 `llvm/llvm-project` 的 PR／issue。
   下面引用的 issue 編號（#159751 等）是從樹裡的註解抄的，**issue 現在的狀態沒看**。
-- ⚠️ **scalable 的題目要能實跑才算驗過**（比照 `Goal.md` §2.4 09-04 那條 GPU 的規則）。
-  本機沒有 SVE 硬體，要靠 qemu-aarch64 跑 `ArmSVE/` 整合測試——**這個環境還沒建，是所有題目共同的前置成本**。
+- ✅ **scalable 的題目要能實跑才算驗過**（比照 `Goal.md` §2.4 09-04 那條 GPU 的規則）。
+  本機沒有 SVE 硬體，靠 qemu-aarch64 跑 `ArmSVE/` 整合測試——**11-28 環境已建好**，上游 18 個 ArmSVE 整合測試在 qemu 下全過。
+  做法與指令見文末〈實跑環境〉。
 
 **先講結論**：82 行裡多數是「本質上做不到」（編譯期無法展開 scalable 維度），不是缺口。
 真的是缺口、又過得了第 1、2 關的只有三題，其中一題是別人路線圖上的大題。
@@ -58,6 +59,18 @@
 **最大的風險（動手前先驗）**：LLVM 後端吃不吃 `<vscale x N x i4>` 的 bitcast。
 MLIR 這層改對了，若 AArch64 後端對子位元組 scalable 型別 legalize 失敗，整合測試會跑不起來。
 **第一步是手寫一段 LLVM IR 丟 `llc -mattr=+sve` 試**，不通就把這題降級成「只有 lit、沒有實跑」，或不做。
+
+**11-28 實測**（`tools/sve-qemu/s1-backend-check/run.sh`，本機 `llc` 24.0.0git，checkout base `376f04dd8bdb`，`-O0` 與 `-O2` 結果相同）：
+
+| 函式 | 內容 | `llc -mattr=+sve` | qemu 128／256／512 bit |
+|---|---|---|---|
+| `trunc_direct` | 現在 MLIR 產生的形式：`trunc` 到 `<vscale x 16 x i4>` | `LLVM ERROR: Cannot scalarize scalable vector stores` | — |
+| `sext_direct` | 現在的形式：`sext` 自 `<vscale x 16 x i4>` | `LLVM ERROR: Cannot scalarize scalable vector loads` | — |
+| `trunc_rewritten` | aligned 改寫會產生的形式（deinterleave ＋ 位元運算） | 編得過 | 值全對 |
+| `sext_rewritten` | aligned 改寫會產生的形式（位元運算 ＋ interleave） | 編得過 | 值全對 |
+
+所以後端風險不成立，而且方向相反：**不改寫的形式後端直接報錯，改寫後的形式才編得過**。
+這題從「效能改寫」變成「讓 scalable 子位元組向量能通過後端」。
 
 ---
 
@@ -149,7 +162,7 @@ supported ATM」（`:1599-1600`）和 scalable 維度的 `shape_cast`／`transpo
 
 ## 建議
 
-1. **先建 qemu-aarch64 ＋ SVE 的實跑環境**，並用一段手寫 LLVM IR 驗 S-1 的後端風險。這一步不過，S-1 要降級。
+1. ~~先建 qemu-aarch64 ＋ SVE 的實跑環境，並用一段手寫 LLVM IR 驗 S-1 的後端風險。~~ ✅ 11-28 兩件都做完，S-1 不用降級。
 2. **S-1 等 #221185 進了再開。**
 3. **S-2 先做 `vscale` 那一半**（另一份清單的第 1 題），不需要 SVE 環境，只要 lit。
 4. **S-3 先去 #159751 留言，不寫 code。**
@@ -157,3 +170,47 @@ supported ATM」（`:1599-1600`）和 scalable 維度的 `shape_cast`／`transpo
 順帶一提：被看見線在 scalable 這個方向的題目**比預期少**。SVE 的支援是 Arm 團隊系統性做的，
 剩下的缺口多半是他們判斷過「做不到」或「還沒有動機」的。要在這裡被看見，
 review 他們的 PR 可能比找漏洞有效。
+
+---
+
+## 實跑環境（2026-11-28 建好）
+
+**結構**：x86 的 `mlir-opt` 做 lowering，AArch64 版的 `mlir-runner` 在 `qemu-aarch64 -cpu max` 裡 JIT 執行。
+全部免 root（sudo 要密碼，做法比照 `~/cuda`）。
+
+| 東西 | 位置 |
+|---|---|
+| qemu 6.2（`qemu-aarch64-static`）＋ AArch64 sysroot | `~/aarch64-cross/sysroot`（`apt-get download` 抓 .deb 再 `dpkg-deb -x`） |
+| 交叉編譯器 | 現有的 clang 14：`--target=aarch64-linux-gnu --sysroot=...`，toolchain 檔 `~/aarch64-cross/aarch64-toolchain.cmake` |
+| AArch64 版 `mlir-runner`／`lli`／runner 函式庫 | `~/llvm-project/build-aarch64`（1.8G，9 核約 45 分鐘） |
+| host build 新增的設定 | `LLVM_TARGETS_TO_BUILD=host;NVPTX;AArch64`、`MLIR_RUN_ARM_SVE_TESTS=ON`、五個 `ARM_EMULATOR_*` |
+| 腳本 | `tools/sve-qemu/setup.sh`（`deps`／`smoke`／`cross`／`enable`／`test`），共用路徑在 `env.sh` |
+
+**跑法**：
+
+```bash
+cd ~/llvm-project/build
+./bin/llvm-lit -v tools/mlir/test/Integration/Dialect/Vector/CPU/ArmSVE tools/mlir/test/Integration/Dialect/Linalg/CPU/ArmSVE
+```
+
+**11-28 的結果**（checkout base `376f04dd8bdb`）：
+
+- qemu `-cpu max` 有 SVE、SVE2、I8MM、BF16；smoke 測試在 128／256／512 bit 都過。預設向量長度 512 bit。
+- 上游 ArmSVE 整合測試 **18／18 過**。
+- 整個 `Integration/`：270 過、16 失敗、145 unsupported。16 個失敗全是 CUDA，和 11-01 記錄的那 16 個相同（WSL2 的 `gpu.host_register`）。
+- 打開 SVE 之後，SparseTensor 等 107 個帶 `%mcr_aarch64_cmd`／`%lli_aarch64_cmd` 的測試也會在 qemu 下多跑 SVE 的 RUN 行；整個 `Integration/` 約 3 分鐘。
+
+**要知道的三件事**：
+
+1. **AArch64 的 runner 不用跟著 patch 重編。** 它只負責 JIT 執行 LLVM dialect；改 `mlir/lib` 的 patch 只要重編 host 的 `mlir-opt`。
+   只有 LLVM dialect 的語法或 runner 函式庫變了才要 `ninja -C ~/llvm-project/build-aarch64 mlir-runner`。
+   host 與 `build-aarch64` 不要同時跑 ninja（後者借用前者的 tblgen）。
+2. **上游 7 個 ArmSVE 測試在模擬器下本來跑不起來。** 它們把 `%mlir_runner_utils`（host 的 x86 函式庫）傳給 AArch64 的 runner，
+   正確的是 `%native_mlir_runner_utils`；第一次跑是 11 過 7 失敗，錯誤是 `cannot open shared object file`。
+   本機的繞法：qemu 會優先開 `<-L 前綴>/<原路徑>`，所以在前綴底下放了指到 AArch64 函式庫的連結（`setup.sh` 的 `link_host_lib_paths`）。
+   7 個檔：`Vector/CPU/ArmSVE/` 的 `compress`、`transfer-read-scalable-non-trailing`、`vector-contract-bfmmla`、`vector-contract-i8mm`；
+   `Linalg/CPU/ArmSVE/` 的 `pack-scalable-inner-tile`、`pack-unpack-mmt4d`、`pack-unpack-scalable-inner-tile`。
+   上游 main `f496863dad20`（11-28）仍是這樣。上游的 buildbot 是原生 SVE 機器，所以不會踩到。
+   **這是一個改測試檔的小 patch 候選**（7 個檔各改一行）。撞車只用 `gh pr list --search` 查了兩組關鍵字，都是 0 筆，不算查完。
+3. **qemu 6.2 沒有 SME。** `ArmSME/` 測試沒開（`MLIR_RUN_ARM_SME_TESTS=OFF`）。要跑 SME 得換新版 qemu。
+

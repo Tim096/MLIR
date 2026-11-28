@@ -116,12 +116,16 @@ gh api repos/llvm/llvm-project --jq .permissions.push   # 要是 true
 
 | # | 題目 | 位置 | 關鍵字 | 狀態 |
 |---|---|---|---|---|
-| S-1 | 子位元組 ext／trunc 的 aligned 改寫被共用前置條件擋掉 scalable（用到的 op 其實都支援） | `VectorEmulateNarrowType.cpp:1620`；`:1795-1805` 會丟 scalable 旗標 | quantization ＋ SVE／RVV | **等 #221185 進了再開**（同一組函式）；先驗 LLVM 後端吃不吃 `<vscale x N x i4>` |
+| S-1 | 子位元組 ext／trunc 的 aligned 改寫被共用前置條件擋掉 scalable（用到的 op 其實都支援） | `VectorEmulateNarrowType.cpp:1620`；`:1795-1805` 會丟 scalable 旗標 | quantization ＋ SVE／RVV | **等 #221185 進了再開**（同一組函式）；後端已驗（11-28）：不改寫的形式後端報錯，改寫後的形式編得過且值對 |
 | S-2 | scalable `vector.step` 沒有範圍；`vscale` 上下界只是 pass 選項 | `VectorOps.cpp:8644`；`Vector/Transforms/Passes.td:33`／`:35` | SVE／RVV | 接在上表題 1 之後；`vscale` 範圍放 IR 還是 pass 選項，是 RFC 的候選題 |
 | S-3 | scalable `linalg.pack` 向量化（上游在兩個 SVE 整合測試點名，issue #159751） | `Vectorization.cpp:2424-2428` | vectorization ＋ tensor layout ＋ SVE | **不直接開 PR**：先看 #159751 現況、留言問；有人做就改成 review |
 
-- [ ] 建 qemu-aarch64 ＋ SVE 的實跑環境（scalable 題目共同的前置；比照 09-04「GPU patch 要在硬體上跑過」）
-- [ ] S-1：手寫 LLVM IR 丟 `llc -mattr=+sve`，確認子位元組 scalable bitcast 過得了後端
+- [x] 建 qemu-aarch64 ＋ SVE 的實跑環境 → **11-28 建好，免 root**：qemu 6.2 ＋ sysroot 在 `~/aarch64-cross`，AArch64 版 `mlir-runner` 在 `~/llvm-project/build-aarch64`，
+  host build 打開 `MLIR_RUN_ARM_SVE_TESTS`。上游 ArmSVE 整合測試 **18／18 過**。腳本 `tools/sve-qemu/setup.sh`，細節見 [`notes/scalable-patch-candidates.md`](notes/scalable-patch-candidates.md) 文末〈實跑環境〉
+- [x] S-1：手寫 LLVM IR 丟 `llc -mattr=+sve` → **11-28 實測（llc 24.0.0git）**：不改寫的 `trunc`／`sext` 後端直接報 `Cannot scalarize scalable vector stores／loads`；
+  aligned 改寫會產生的形式編得過，qemu 下 128／256／512 bit 值全對。後端風險不成立，S-1 不降級
+- [ ] 新候選（建環境時發現）：上游 7 個 ArmSVE 整合測試傳 `%mlir_runner_utils`（host 函式庫）給模擬器裡的 runner，該用 `%native_mlir_runner_utils`；
+  模擬器下這 7 個跑不起來，上游 main `f496863dad20` 仍如此。7 個檔各改一行。撞車只粗查過（0 筆）
 - [ ] S-3：讀 #159751，決定留言或 review
 - 不要碰：mixed-mode `vector.contract`（`LowerVectorContract.cpp:918`），08-21 時被 #117753 佔著，現況沒查。
 
@@ -1638,7 +1642,9 @@ PR 描述（＝ commit 訊息，squash merge 後就是它）：[`patches/m1b-sca
 |---|---|
 | 本 repo | `~/Side_Project/MLIR` |
 | LLVM 上游 | `~/llvm-project`（主要工作區）+ `~/llvm-explore`（worktree，分支 `explore`） |
-| 建置目錄 | `~/llvm-project/build` |
+| 建置目錄 | `~/llvm-project/build`（host；11-28 起 target 是 `host;NVPTX;AArch64`） |
+| AArch64 建置目錄 | `~/llvm-project/build-aarch64`（只有 `mlir-runner`／`lli`／runner 函式庫，給 qemu 用） |
+| qemu ＋ AArch64 sysroot | `~/aarch64-cross`（免 root；qemu 6.2，有 SVE／SVE2，沒有 SME） |
 | 機器 | 16 核 / 31GB RAM / 928GB 可用 |
 | Toolchain | clang 14.0.0、lld 14、ninja 1.10.1、ccache 4.5.1、cmake 3.22.1、z3 4.8.12 |
 
@@ -2311,6 +2317,9 @@ ninja check-mlir                    # 建置 + 跑全部 MLIR 測試
 ./bin/llvm-lit -v ../mlir/test/Dialect/Arith/canonicalize.mlir   # 跑單一測試檔
 ./bin/mlir-opt input.mlir -canonicalize                          # 手動觀察 pass 效果
 ./bin/mlir-opt input.mlir --mlir-print-ir-after-all              # 看每個 pass 後的 IR
+
+# SVE：在 qemu 下跑上游的 ArmSVE 整合測試（環境見 tools/sve-qemu/setup.sh）
+./bin/llvm-lit -v tools/mlir/test/Integration/Dialect/Vector/CPU/ArmSVE tools/mlir/test/Integration/Dialect/Linalg/CPU/ArmSVE
 
 git clang-format HEAD~1             # 送 PR 前必跑
 

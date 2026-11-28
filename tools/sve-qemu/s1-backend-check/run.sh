@@ -2,12 +2,15 @@
 # S-1 backend check: which scalable sub-byte functions does llc accept for SVE,
 # and do the accepted ones compute the right values under qemu?
 #
-#   ./run.sh                      # uses llc / llvm-extract from PATH
-#   LLVM_BIN=~/llvm-project/build/bin ./run.sh
+#   ./run.sh                      # uses ~/llvm-project/build/bin
+#   LLVM_BIN=/other/build/bin ./run.sh
+#
+# Needs `../setup.sh deps` (qemu and the sysroot) and an llc that has the
+# AArch64 target (`../setup.sh enable` adds it to the host build).
 set -uo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
-bin=${LLVM_BIN:+$LLVM_BIN/}
-sysroot=${AARCH64_SYSROOT:-/usr/aarch64-linux-gnu}
+. "$here/../env.sh"
+bin=${LLVM_BIN:-$HOME/llvm-project/build/bin}/
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
@@ -32,11 +35,11 @@ for opt in 0 2; do
     fi
   done
   [ ${#objs[@]} -eq 0 ] && continue
-  aarch64-linux-gnu-gcc -O1 -march=armv8-a+sve "${defs[@]}" "$here/harness.c" \
+  aarch64_cc -O1 -march=armv8-a+sve "${defs[@]}" "$here/harness.c" \
     "${objs[@]}" -o "$work/t$opt"
   for vq in 1 2 4; do
     printf '  '
-    qemu-aarch64 -cpu max,sve-max-vq=$vq -L "$sysroot" "$work/t$opt" || status=1
+    "$QEMU" -cpu max,sve-max-vq=$vq -L "$QEMU_LIB_PREFIX" "$work/t$opt" || status=1
   done
 done
 exit $status
