@@ -13,6 +13,14 @@
 
 ---
 
+## 下次開場先提醒本人
+
+- [ ] **週一（2026-11-30）起：貼 #221185 的請人 land 留言。** 草稿在 [`patches/2026-11-28-221185-land-request.md`](patches/2026-11-28-221185-land-request.md)（11-28 本人看過，決定週一再貼）。
+      貼之前先查三件事：head 仍是 `8e3c09d49d`、`mergeable_state` 不是 `dirty`、`permissions.push` 還是 `false`。
+      push 已變 `true` 就不貼，改成自己 merge；已經有人 land 了就把這條劃掉。
+
+---
+
 ## 一句話現況
 
 **11-28：本人告知 commit access 已取得（未實查）；第一件事是自己 merge #221185。長期目標改成「在 `arith`＋範圍／poison 分析這一塊當 owner」，見 `Goal.md` §11 與下方 11-28 段落。十三個 commit、九個 open PR 不變。**
