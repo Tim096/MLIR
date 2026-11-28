@@ -104,7 +104,7 @@
   - #245951（yuanyiboyyb）：改了 unranked tensor（`shape.shape_of`＋`shape.num_elements`＋`tensor.splat`＋`tensor.reshape`），PR 由 +236 變 +493，新 head `bf2b3bf6dc`；`ExpandOps` 多依賴 Math／Shape dialect。**問了一個問題**：要不要為了省掉 splat 的暫存 buffer 另外加 `math.signbit`，還是這個 PR 維持 copysign。未回、新版未重驗。
   - #245655、#233536：沒有回應。
 - **11-26 重驗三個新版**（本機分支 `review/batch-1126`，67 個 lit 全過）：#237342、#233860 實作沒變；#245951 新版 98 個結果仍相同、unranked 可展開。回覆在 `patches/2026-11-26-review-followups.md`，**三則已貼**（都是 COMMENT；沒有 repository access 時 APPROVE 會被 API 拒絕，422）。
-- **順帶發現（還沒查是不是已知、也沒在 origin/main 上重現）**：`arith.uitofp %t : tensor<*xi1> to tensor<*xf32>` 讓 verifier assert（`cast<RankedTensorType>`，在 `UIToFPOp::verifyInvariantsImpl`）。在主攻區塊（arith）內，可當自己的題目；開之前先搜 issue、在新的 main 上重現、看其他 cast op 有沒有一樣的問題。
+- **順帶發現的 `uitofp` unranked assertion：已知**。就是 issue #234633，#235349（viniciusfdasilva，+2/−1）在修，origin/main 上還沒修（11-28 查）。不另開題目，改成 review 那個 PR。
 - commit access（#245596）：仍是兩個 LGTM，邀請未發，`permissions.push=false`。
 
   | PR | 作者 | 結論 | 草稿 |
@@ -116,6 +116,17 @@
   | #233536 | kodlan | 490 組可比的全部一致，679 組比不了；`f8E8M0FNU` 當中間型別時條件誤判為精確 | 同上 |
 
 - 本機分支：`review/pr-237342`、`review/batch-1125`（後者疊在 `intrange-unsigned-loop-bounds` 上，四個 PR 一次 build）。`patches/2026-11-25-issue-addi-subi-divisibility.md` 留作查證紀錄，不送。
+- **11-28 第二批（三則，11-28 已貼：#235349 pullrequestreview-6096723465、#227199 6096723586、#236005 6096723679）**：本機分支 `review/batch-1128`（`376f04dd8bdb`＋三個 PR，44 個 lit 全過），草稿在 `patches/2026-11-28-review-batch.md`。
+
+  | PR | 作者 | 結論 |
+  |---|---|---|
+  | #235349 | viniciusfdasilva | 不再 assert；同 trait 的其他 cast op 在 unranked 上也正常；沒有測試；描述說「報錯」但 unranked → unranked 其實是被接受 |
+  | #227199 | pranavalavandi | 四種 `index_cast`／`index_castui` 組合都折，LGTM；一個空行的 nit |
+  | #236005 | meinie0826 | 寬度 1～8 共 86,862 組零反例，flag 只會是 refinement，LGTM；建議作者補無號版（`divui`／`remui`） |
+
+- 11-28 狀態：commit access 邀請仍未發（管理員 11-12 之後沒清過排隊，41 張 open）；自己九個 PR 無動作；#233860 作者 11-26 修了錯字（`757909043b`）；其餘四個審過的 PR 作者未回。banach-space 11-25 起離開約一週。
+- **11-28 他的指示：review 的範圍以「跟我們相關」為準**。重排後最相關的是 #235199（matthias-springer，10-24 開，零 review）：跟自己的 #215696 修同一件事、公式相同、改同四個檔，互相沒提到對方；它現在跟 main 衝突（#238124）。本機分支 `review/pr-235199` 驗過：181 組邊界值折疊與實跑全對。比對在 `patches/2026-11-28-review-batch.md` 後半。**11-28 已貼**（pullrequestreview-6096700565）：指出與 #215696 重疊、附驗證結果、問 matthias-springer 要留哪個，並說可以 rebase 或關掉 #215696。等他回覆。下一批候選：#230976、#245151（與 #217892 同檔）。
+- 沒選：#233234（kuhar 要作者先發 RFC）。其他看過的候選：#224460（已有兩人留言）、#235199（matthias-springer 的 ceildiv INT_MIN，與自己的 #215696 重疊）、#230976／#236483／#236487／#245499（窄浮點展開，+數百到兩千行）。
 - 還沒審的候選：#242700（draft）、#241853（ValueBounds，+713，不在主攻區塊正中）。
 
 **`index.ceildivs (INT_MAX, -1)` 的 trap（11-24 查完）**：
