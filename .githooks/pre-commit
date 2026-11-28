@@ -1,0 +1,14 @@
+#!/bin/sh
+# Refuse a commit whose author or committer is Claude.
+. "$(dirname "$0")/patterns.sh"
+
+for which in AUTHOR COMMITTER; do
+  ident=$(git var GIT_${which}_IDENT | sed 's/ [0-9]* [-+][0-9]*$//')
+  if is_bad_ident "$ident"; then
+    echo "pre-commit: the $which is '$ident'." >&2
+    echo "Commits in this repository are made as $owner_name <$owner_email>:" >&2
+    echo "  git config user.name '$owner_name' && git config user.email $owner_email" >&2
+    echo "and unset GIT_AUTHOR_* / GIT_COMMITTER_* if the environment sets them." >&2
+    exit 1
+  fi
+done

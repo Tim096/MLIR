@@ -1,0 +1,51 @@
+#!/bin/sh
+# Refuse a push that would publish a commit authored or committed as Claude,
+# or one whose message carries an assistant attribution line. This is the last
+# check: it also sees commits that never went through pre-commit or commit-msg
+# (cherry-picks, fast-forward merges of another branch).
+#
+# Only commits that are new to the remote being pushed to are checked. Commits
+# that already sit on a different remote (upstream LLVM, when pushing to a
+# fork) are other people's and are skipped.
+. "$(dirname "$0")/patterns.sh"
+
+remote=$1
+zero=$(git hash-object --stdin </dev/null | tr '0-9a-f' '0')
+
+others=
+for r in $(git remote); do
+  [ "$r" = "$remote" ] || others="$others --remotes=$r"
+done
+
+status=0
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [ "$local_sha" = "$zero" ] && continue # deleting a ref
+  if [ "$remote_sha" = "$zero" ]; then
+    exclude=
+  else
+    exclude=$remote_sha
+  fi
+  # shellcheck disable=SC2086
+  for c in $(git rev-list "$local_sha" --not $exclude $others); do
+    why=
+    for fmt in '%an <%ae>' '%cn <%ce>'; do
+      ident=$(git log -1 --format="$fmt" "$c")
+      is_bad_ident "$ident" && why="$why
+    identity: $ident"
+    done
+    if hits=$(git log -1 --format=%B "$c" | bad_message_lines); then
+      why="$why
+$(printf '%s\n' "$hits" | sed 's/^/    message: /')"
+    fi
+    if [ -n "$why" ]; then
+      echo "pre-push: $(git log -1 --format='%h %s' "$c")$why" >&2
+      status=1
+    fi
+  done
+done
+
+if [ $status -ne 0 ]; then
+  echo "pre-push: refusing to push to '$remote'. Recommit the commits above as" >&2
+  echo "$owner_name <$owner_email> without the attribution lines." >&2
+fi
+exit $status

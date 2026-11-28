@@ -1,0 +1,10 @@
+#!/bin/sh
+# Refuse a commit message that carries an assistant attribution line.
+. "$(dirname "$0")/patterns.sh"
+
+if hits=$(grep -v '^#' "$1" | bad_message_lines); then
+  echo "commit-msg: the message credits an assistant:" >&2
+  printf '%s\n' "$hits" | sed 's/^/  /' >&2
+  echo "Remove these lines and commit again." >&2
+  exit 1
+fi

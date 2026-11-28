@@ -2,5 +2,6 @@
 playground/scratch*.mlir
 playground/*.tmp.mlir
 
-# Claude Code 的本機設定不進版控
-.claude/
+# Claude Code 的本機設定不進版控；settings.json 是專案設定（雲端 session 也讀），要進
+.claude/*
+!.claude/settings.json
