@@ -1,9 +1,9 @@
-# Discourse 文稿：範圍＋poison 與 speculation（未發）
+# Discourse 文稿：範圍＋poison 與 speculation（11-16 已貼）
 
 貼到：<https://discourse.llvm.org/t/a-new-ub-assume-operation/92834>
 （`ub.assume` 討論串。它違反時回傳 poison，並接到 `IntegerRangeAnalysis`，和這點直接相關。）
 
-狀態：**草稿，尚未發出。** Discourse 要本人貼。
+狀態：**本人 2026-11-16 17:19 UTC 已貼出**，`ub.assume` 討論串第 9 則（依 `TODO.md` 11-16 段落的紀錄；11-28 把這行過期的「尚未發出」改掉）。
 
 ---
 

@@ -15,9 +15,22 @@
 
 ## 下次開場先提醒本人
 
-- [ ] **週一（2026-11-30）起：貼 #221185 的請人 land 留言。** 草稿在 [`patches/2026-11-28-221185-land-request.md`](patches/2026-11-28-221185-land-request.md)（11-28 本人看過，決定週一再貼）。
+規則（本人 11-28 定）：**做好了但還沒貼／還沒送的東西都列在這裡，下次開場第一件事就提醒。**
+貼出去或送出去之後劃掉；新做好的草稿當下就加進來。
+
+要貼的留言：
+
+- [ ] **#221185 的請人 land 留言：週一（2026-11-30）起貼。** 草稿在 [`patches/2026-11-28-221185-land-request.md`](patches/2026-11-28-221185-land-request.md)（11-28 本人看過，決定週一再貼）。
       貼之前先查三件事：head 仍是 `8e3c09d49d`、`mergeable_state` 不是 `dirty`、`permissions.push` 還是 `false`。
       push 已變 `true` 就不貼，改成自己 merge；已經有人 land 了就把這條劃掉。
+
+做好但還沒送的 patch（都在 `~/llvm-project` 的本機分支；開新 PR 受 09-14 的承諾限制，何時送由本人決定）：
+
+- [ ] **B-1：#241712 的修正**，分支 `intrange-unsigned-loop-bounds`（`31ad4548426c`，11-25 做完，163 個 lit 過）。
+      還沒 rebase 到 origin/main、還沒寫 PR 描述。11-28 查：issue 仍 open、沒有 assignee，別人的 #242881 已關。
+- [ ] **合併版屬性 PR**，分支 `vector-memref-keep-attrs`（`175884d3752b`）。原本的條件是「等 vector 那邊有 PR 進了再送」；
+      #221298 已於 11-21 進。分支落後 origin/main 很多，送之前要 rebase 重驗。
+- [ ] **#221386 的 rebase**，分支 `rebase/amdgpu-scaling-e8m0-scale`（`6552de5a31b7`）。條件是「有人回再推」，目前沒有人回過。
 
 ---
 
