@@ -88,12 +88,29 @@ gh api repos/llvm/llvm-project --jq .permissions.push   # 要是 true
 | §11.4 準則 | 現況 | 下一步 |
 |---|---|---|
 | owner 只在一塊當（owner 線） | 11-25 已定：`arith`＋範圍／poison 分析 | 主線 A（poison 四題）照走，與「一題算兩邊」的題（如 A-④）交錯排；B-1（#241712，本機 `31ad4548426c`）何時送由本人決定 |
-| `vector` 是被看見線（`Goal.md` §11.5，本人 11-28 決定） | 11-25 的「`vector` 不開新題」放寬：可以開，但只挑講得出下游是誰的題 | 還沒選題；09-14 的承諾與 09-11 的節奏對兩條線合計 |
+| `vector` 是被看見線（`Goal.md` §11.5，本人 11-28 決定） | 11-25 的「`vector` 不開新題」放寬：可以開，但只挑講得出下游是誰的題 | 候選五題見下表，還沒動手；09-14 的承諾與 09-11 的節奏對兩條線合計 |
 | review 量追上 patch 量 | 兩批八則＋#235199 已貼；13 個 merged、9 個 open | 維持一天一到兩則、每則本機實跑；下一批候選 #230976、#245151 |
 | RFC／講題（M∞） | Discourse `ub.assume` 串第 19 則已公開，matthias-springer 未回 | A-①「可能是 poison」分析是 RFC 的候選題；先等第 19 則的回覆、與 #152932 協調 |
 
 - 第一個「被 cc」的訊號已經有了：#237342 的作者 11-26 把 Tim096 加進 requested reviewers。之後這類事件記在這裡。
 - §11 的薪資數字是粗估，人物去向表有三列未查證（Springer、Pienaar、Bondhugula），引用前要重查。
+
+**被看見線候選（11-28 掃描，[`notes/visibility-track-candidates.md`](notes/visibility-track-candidates.md)）**：
+行號對 `origin/main` `a6321f2d`。**只讀了原始碼：沒有 build、沒有重現、沒查 open PR 撞車**
+（掃描的 session 讀不到 `llvm/llvm-project`）。排隊用，不是現在送。
+
+| # | 題目 | 位置 | 關鍵字 | 算兩邊 | 動手前要補 |
+|---|---|---|---|---|---|
+| 1 | `vector.vscale` 沒有範圍資訊（回 `[1, max]`） | `VectorOps.td:3079` | SVE／RVV | ✅ A-③ 的第一個客戶 | 撞車；重現 `remui` by `vscale*8` 的現況；`affine.apply` 的 `ceildiv` 傳不傳得過去；LangRef 對 `vscale` 的原文 |
+| 2 | `shuffle`／`interleave`／`deinterleave`／`from_elements` 等不傳範圍 | `VectorOps.td`（只有 6 個 op 有） | quantization | ✅ | **第 1 關沒證據**：找出對向量跑 `arith-int-range-narrowing` 的 pipeline，找不到就不做 |
+| 3 | padded `linalg.pack` 分解放棄（09-05 的 L-2） | `Linalg/Transforms/Transforms.cpp:1230` | tensor layout、tiling | ❌ | 撞車；先 @ #218141 作者 |
+| 4 | `transfer_read/write` 降維不支援 tensor（08-21 第 4 名） | `VectorTransferOpTransforms.cpp:485`、`:609` | vectorization | ❌ | 撞車；預期有設計辯論 |
+| 5 | strided gather 限制太多（08-21 第 5 名） | `LowerVectorGather.cpp:114`–`:147` | GPU codegen（弱） | ❌ | 撞車 |
+
+- [ ] 題 1：查撞車 ＋ 本機重現現況（建議第一個做）
+- [ ] 題 2：補第 1 關證據，補不出來就換題 3
+- [ ] 專門掃一次 scalable（約 20 處「scalable vectors are not supported」，清單在 notes 檔尾）
+- 不要碰：mixed-mode `vector.contract`（`LowerVectorContract.cpp:918`），08-21 時被 #117753 佔著，現況沒查。
 
 ### 📌 2026-11-24：#221298 merge、Discourse 回覆通過審核
 
