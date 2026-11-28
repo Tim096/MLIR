@@ -75,7 +75,7 @@ gh api repos/llvm/llvm-project --jq .permissions.push   # 要是 true
 
 拿到之後改變的事：
 
-- [ ] **自己 merge #221185，當第一次**（11-25 的決定）。**11-28 查：#221185 仍 OPEN、沒有 approve（最後更新 11-24），加上 push 還是 `false`，目前做不了。**照 11-25 段落的檢查表：Squash and merge、
+- [ ] **自己 merge #221185，當第一次**（11-25 的決定）。**11-28 更正：#221185 是 OPEN，**有兩個 approve**：FedericoBruzzone 11-16、banach-space 11-24（「Thanks, LGTM!」，就在目前的 head `8e3c09d49d` 上），CI 綠、與 main 無衝突。先前寫的「沒有 approve」是查錯。擋住的只剩 push 還是 `false`（#245596 的邀請還沒發）：自己 merge 做不了，可以請 reviewer 代為 land。**照 11-25 段落的檢查表：Squash and merge、
       標題／描述與 PR 一致、作者 email 是 `tseng.tim096@gmail.com`、CI 綠、與 main 無衝突。
 - [ ] 其餘 open PR：拿到 approve 就自己 land，不必再請人。**仍然等 approve 才 merge**，commit access 不是免審。
 - [ ] review 別人的 PR 可以正式按 APPROVE（之前 API 回 422，只能 COMMENT）。已審過、結論是 LGTM 的

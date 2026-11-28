@@ -118,7 +118,7 @@ Assertion `sourceVectorType.getRank() == 1 && !sourceVectorType.isScalable() && 
 - 同一個檔另有兩個 open PR：#199243（bjacob，`RewriteExtOfBitCast` 丟掉 sign extension，2026-05-27 後沒動）、
   #208873（qyingwu，Guard transfer read narrow type emulation，11-27 還在動）。
 - 鄰近的活動：#245508、#245296 是 XeGPU 的 `i4`（固定長度）。
-- **#221185 仍是 OPEN，沒有 approve**（11-28 查，最後更新 11-24）。
+- **#221185 是 OPEN，**有兩個 approve**：FedericoBruzzone 11-16、banach-space 11-24（「Thanks, LGTM!」，就在目前的 head `8e3c09d49d` 上），CI 綠、與 main 無衝突**（11-28 更正；先前寫的「沒有 approve」是查錯）。還沒 merge：本人沒有 commit access。
 
 ---
 
@@ -233,7 +233,7 @@ supported ATM」（`:1599-1600`）和 scalable 維度的 `shape_cast`／`transpo
 ## 建議
 
 1. ~~先建 qemu-aarch64 ＋ SVE 的實跑環境，並用一段手寫 LLVM IR 驗 S-1 的後端風險。~~ ✅ 11-28 兩件都做完，S-1 不用降級。
-2. **S-1 拆兩步**（11-28 審查）：S-1a 修 assert，小、可獨立送；S-1b 等 #221185 進了再開。#221185 目前 OPEN、沒有 approve。
+2. **S-1 拆兩步**（11-28 審查）：S-1a 修 assert，小、可獨立送；S-1b 等 #221185 進了再開。#221185 目前 OPEN、兩個 approve（Federico、banach-space），等人 land。
 3. ~~S-2 先做 `vscale` 那一半（另一份清單的第 1 題），不需要 SVE 環境，只要 lit。~~
    **11-28 審查**：`vscale` 只有下界沒有效果，S-2 與那一題合成一題，先回答「分析讀不讀 `llvm.vscale_range`」。
 4. **S-3 不寫 code**；#159751 的 assignee 是 banach-space，留言的時機排在手上 PR 消化之後。
