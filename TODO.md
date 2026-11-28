@@ -9,12 +9,13 @@
 >
 > 新 session 開場建議直接說：「讀 Goal.md 和 TODO.md，然後接續」。
 
-最後更新：2026-11-24
+最後更新：2026-11-28
 
 ---
 
 ## 一句話現況
 
+**11-28：本人告知 commit access 已取得（未實查）；第一件事是自己 merge #221185。長期目標改成「在 `arith`＋範圍／poison 分析這一塊當 owner」，見 `Goal.md` §11 與下方 11-28 段落。十三個 commit、九個 open PR 不變。**
 **11-24：十三個 commit（#221298 11-21 進）、九個 open PR，全部 mergeable、CI 綠，11-21 之後沒有新 review。Discourse 回覆已通過審核（第 19 則），還沒有人直接回。詳見下方 11-24 段落。**
 **11-21：十二個 commit、十個 open PR。#221298 有兩個 approve（Federico、banach-space），nit 已改並請 land；#221185 回了 banach-space 四則 inline；#221268 已關（#243425 進了）。Discourse 給 matthias-springer 的回覆本人 11-21 已貼（`patches/2026-11-21-discourse-reply-matthias.md`），等版主審核。詳見下方 11-21 段落。**
 **11-17：#221298、#221185 得到 FedericoBruzzone approve（都在等 banach-space）；#221385 回了三點。下一個大題改成「非 poison 分析」，已在 Discourse `ub.assume` 討論串第 9 則提問，等回覆。詳見下方 11-17 段落。**
@@ -58,6 +59,40 @@
 | [#221386](https://github.com/llvm/llvm-project/pull/221386) | M1-f：`ArithToAMDGPU` 對 scale 型別零檢查，硬體只讀 exponent；改成只認 `f8E8M0FNU`（其餘留給 `arith-expand`），並把 `arith.truncf ... toward_zero : f32 to f8E8M0FNU` 折進指令。#215295 krzysz00 的建議、#217892 的 AMDGPU 側 | 🆕 **2026-09-05 送出**，head `3cc500a59ae0`，3 個檔案 +134/−30。留言（5549169899）點名 krzysz00、tgymnich、Muzammiluddin-Syed-ECE、kuhar，並問要不要改成 pass 內自己展開 | 跑中 |
 | [#230085](https://github.com/llvm/llvm-project/pull/230085) | 🆕 fastmath 旗標的 self-contained 定義（`ArithBase.td` +32），取代 #217087（ivanradanov 10-07 要我自己送） | 🆕 **2026-10-08 送出**，head `a2589de0a682`。比 09-15 草稿多改三處：補 `afn` 為 rewrite-based、`nsz` 只講 operand、拿掉「follows IEEE 754」 | 跑中 |
 | [#230086](https://github.com/llvm/llvm-project/pull/230086) | 🆕 APFloat：無號格式（E8M0FNU／E5M3FNU）的負值變 NaN＋`opInvalidOp`，負零／負 NaN 只丟 sign；修 `-Inf`／`-NaN` convert assert、`1.0 - 1.5` 得 `-0.5`。#223286 的 follow-up | 🆕 **2026-10-08 送出**，head `24127a2345d7`，留言 @tgymnich（說明為何不照 09-14 說的清 sign，改照 #216387）。推翻 #107127／#210720 兩個 subtract death test | 跑中 |
+
+### 📌 2026-11-28：commit access、長期目標改成「擁有一塊」
+
+**Commit access**：本人 11-28 告知已取得。**這個 session 沒有實查**（GitHub 權限只到 `Tim096/MLIR`，
+讀不到 `llvm/llvm-project`），下方 11-28 稍早的紀錄仍寫「邀請未發、`permissions.push=false`」。
+下次在本機確認：
+
+```bash
+gh api repos/llvm/llvm-project --jq .permissions.push   # 要是 true
+```
+
+拿到之後改變的事：
+
+- [ ] **自己 merge #221185，當第一次**（11-25 的決定）。照 11-25 段落的檢查表：Squash and merge、
+      標題／描述與 PR 一致、作者 email 是 `tseng.tim096@gmail.com`、CI 綠、與 main 無衝突。
+- [ ] 其餘 open PR：拿到 approve 就自己 land，不必再請人。**仍然等 approve 才 merge**，commit access 不是免審。
+- [ ] review 別人的 PR 可以正式按 APPROVE（之前 API 回 422，只能 COMMENT）。已審過、結論是 LGTM 的
+      （#245655、#227199、#236005）要不要補 APPROVE，由本人決定。
+- `Goal.md` §2.4 的 09-11 規則裡「approve 當天貼 I don't have commit access, could you land it」那一句失效；
+  同一條的節奏限制（一天最多 2～3 個 PR、週五下午以後不送、ping 的規矩）照舊。
+- 09-14 對 banach-space 的承諾（審中的 PR 進或關之前不開新 PR）**不因此解除**。
+
+**長期目標（`Goal.md` §11、§2.4 11-28 列）**：衡量方式從「merged commit 數」改成
+「這一塊有 PR 進來時，別人會不會主動 cc 我」，終點是被列進 `mlir/Maintainers.md`。
+對應到手上的事：
+
+| §11.4 準則 | 現況 | 下一步 |
+|---|---|---|
+| 只在一塊深耕 | 主攻區塊 11-25 已定：`arith`＋範圍／poison 分析 | 主線 A（poison 四題）照走；B-1（#241712，本機 `31ad4548426c`）何時送由本人決定 |
+| review 量追上 patch 量 | 兩批八則＋#235199 已貼；13 個 merged、9 個 open | 維持一天一到兩則、每則本機實跑；下一批候選 #230976、#245151 |
+| RFC／講題（M∞） | Discourse `ub.assume` 串第 19 則已公開，matthias-springer 未回 | A-①「可能是 poison」分析是 RFC 的候選題；先等第 19 則的回覆、與 #152932 協調 |
+
+- 第一個「被 cc」的訊號已經有了：#237342 的作者 11-26 把 Tim096 加進 requested reviewers。之後這類事件記在這裡。
+- §11 的薪資數字是粗估，人物去向表有三列未查證（Springer、Pienaar、Bondhugula），引用前要重查。
 
 ### 📌 2026-11-24：#221298 merge、Discourse 回覆通過審核
 
